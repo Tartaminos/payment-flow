@@ -3,7 +3,7 @@
 - **Type:** Business rule
 - **Status:** Accepted at the behavioral level; reconciliation workflow pending
 - **Scope:** External PSP operations with unresolved outcome
-- **Related:** [BR-002](BR-002-uncertain-psp-outcomes.md)
+- **Related:** [BR-002](BR-002-uncertain-psp-outcomes.md), [BR-007](BR-007-bounded-psp-retries.md), [BR-008](BR-008-block-conflicting-financial-operations.md)
 
 ## Business context
 
