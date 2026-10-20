@@ -50,6 +50,8 @@ Documentation is the source of truth for decisions made during the system-design
 | [BR-004](docs/requirement/BR-004-idempotent-capture-requests.md) | Capture retries are idempotent and new captures after a completed capture are rejected. |
 | [BR-005](docs/requirement/BR-005-reconciliation-after-24h-unknown.md) | An operation still UNKNOWN after 24 hours requires reconciliation, not automatic cancellation. |
 | [BR-006](docs/requirement/BR-006-distinguish-technical-failure-from-decline.md) | Definitive technical failure, authorization decline, and uncertain outcome must remain distinct. |
+| [BR-007](docs/requirement/BR-007-bounded-psp-retries.md) | Bounded, PSP-safe HTTP attempts with per-attempt timeouts of **5s → 10s → 20s**; exhaustion alone never proves failure. |
+| [BR-008](docs/requirement/BR-008-block-conflicting-financial-operations.md) | Block new conflicting operations while prior PSP outcomes remain unresolved; no override in the MVP. |
 
 ### Non-functional requirements
 
@@ -80,4 +82,4 @@ All payment credentials, card tokens, and PSP interactions in this repository mu
 
 ## Current milestone
 
-BR-001 through BR-006 and NFR-001 are documented. Payment/PaymentOperation state machines and the append-only financial audit approach, including retention periods, are agreed. Next, refine remaining business invariants and failure scenarios **before** choosing a service topology or writing production code.
+BR-001 through BR-008 and NFR-001 are documented. Payment/PaymentOperation state machines, append-only audit retention, bounded PSP HTTP attempt timeouts (5s/10s/20s), and blocking of conflicting unresolved operations are agreed. Next, finalize the relational data model, constraints and remaining failure scenarios **before** choosing a service topology or writing production code.
