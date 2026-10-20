@@ -24,11 +24,11 @@ Model **Payment** separately from **PaymentOperation**, with independent state m
 
 - `Payment.status` uses the MVP business states: `CREATED`, `AUTHORIZED`, `CAPTURED`, `DECLINED`, `CANCELED`, `EXPIRED` (added after BR-003 was accepted).
 - A `PaymentOperation` has its own identity, references its Payment, and carries `type` (`AUTHORIZE`, `CAPTURE`, `VOID`) and `status`.
-- `PaymentOperation.status` uses: `PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `UNKNOWN`.
+- `PaymentOperation.status` initially used: `PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `UNKNOWN`. **Accepted refinement in [ADR-0003](0003-distinguish-financial-success-from-rejection.md):** add `REJECTED` and reserve `SUCCEEDED` for actual financial success.
 - `PaymentOperationStatus` is a value/enum, not a third entity.
 - In particular, PSP timeouts / uncertain results are recorded as `PaymentOperationStatus.UNKNOWN`; they do not override the last confirmed `Payment.status`.
 
-Authorization/capture business results must be kept distinct from whether the corresponding PSP interaction has a definitive execution result. Their final data representation is deferred.
+The original separation of business Payment state and operation state remains valid. [ADR-0003](0003-distinguish-financial-success-from-rejection.md) subsequently clarified that a definitive PSP business rejection is `PaymentOperationStatus.REJECTED` (not `SUCCEEDED`), while detailed provider reason codes remain separately represented.
 
 See the state-machine document for primary transitions, examples, and open questions.
 
