@@ -166,6 +166,6 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - Support for partial capture, multiple captures, refunds, chargebacks, and settlement outside the initial scope; exact expiration detection, timing, and reconciliation mechanics remain open.
 - Conditional updates / optimistic locking / uniqueness guarantees, operation retries and webhook ordering.
 - Precise implementation of consumer idempotency and message schema.
-- Audit trail representation, event retention periods, sensitive-data minimization and storage strategy; these have **not** yet been approved.
+- Audit trail and retention are now approved under [NFR-001](../requirement/NFR-001-transaction-traceability-and-retention.md) and [ADR-0002](../adr/0002-append-only-audit-and-retention.md): append-only durable audit records, 5-year financial/audit retention, 30-day logs, and 7-day Kafka message retention. **Schemas, purge mechanisms, retention clock and security controls remain to be designed.**
 
 We will decide these items during later system-design steps rather than silently locking them into this document.
