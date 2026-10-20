@@ -58,13 +58,13 @@ The policy's precise retention start event, archiving mechanism, storage schema,
 **Costs / limitations**
 - Additional write/storage cost, retention lifecycle, and query/indexing work.
 - Database-level immutability, archival, evidence integrity, and disaster-recovery measures must still be designed; “append-only” in the application is not proof against privileged database modification.
-- Audit events are **not automatically integration events**; Kafka delivery may need an Outbox and separate publication tracking.
+- Audit events are **not automatically integration events**; Kafka delivery requires the Transactional Outbox subsequently approved in [ADR-0004](0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), including separate publication tracking.
 - Correlation IDs improve tracing but do not replace financial identity/idempotency keys.
 - Long retention must be reviewed against applicable security/privacy/legal duties for any actual production system.
 
 ## Related design tasks
 
 - Define audit event contracts and database schema.
-- Decide current-state vs. audit-update transactions and eventual Outbox boundaries.
+- Define the concrete Outbox schema and its transactional boundaries, following the accepted design in [ADR-0004](0004-synchronous-acceptance-asynchronous-processing-with-outbox.md).
 - Design access controls, safe PSP metadata, retention enforcement and preservation of unresolved operations.
 - Determine how to handle correction events, idempotent delivery, and lifecycle events that do not change a business status.
