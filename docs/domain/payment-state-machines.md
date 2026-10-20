@@ -75,6 +75,7 @@ public enum PaymentOperationStatus {
     PENDING,
     PROCESSING,
     SUCCEEDED,
+    REJECTED,
     FAILED,
     UNKNOWN
 }
@@ -84,7 +85,8 @@ public enum PaymentOperationStatus {
 | --- | --- |
 | `PENDING` | The operation is registered/queued but not yet being executed. |
 | `PROCESSING` | The PSP interaction is in progress; final outcome is not known. |
-| `SUCCEEDED` | The operation has completed with a definitive PSP outcome that has been recorded. A successfully received **decline** response is not the same as an approved payment; see the distinction below. |
+| `SUCCEEDED` | The PSP confirmed the requested **financial operation succeeded** (e.g. authorization approved, capture completed). |
+| `REJECTED` | The PSP definitively rejected the operation for a **business/domain reason**, such as a declined card authorization. |
 | `FAILED` | A definitive execution/technical failure has been established, not merely a timeout. Whether and how it can be retried is a separate decision. |
 | `UNKNOWN` | The request may have executed at the PSP, but its outcome is not yet reliably known; investigation/reconciliation is needed. |
 
@@ -94,24 +96,29 @@ public enum PaymentOperationStatus {
 stateDiagram-v2
     [*] --> PENDING
     PENDING --> PROCESSING: dispatch
-    PROCESSING --> SUCCEEDED: definitive PSP outcome recorded
-    PROCESSING --> FAILED: definitive execution failure
+    PROCESSING --> SUCCEEDED: financial operation confirmed successful
+    PROCESSING --> REJECTED: PSP business rejection confirmed
+    PROCESSING --> FAILED: definitive technical non-execution
     PROCESSING --> UNKNOWN: timeout / ambiguous result
-    UNKNOWN --> SUCCEEDED: outcome resolved
-    UNKNOWN --> FAILED: proven not executed / definitively failed
+    UNKNOWN --> SUCCEEDED: successful outcome confirmed
+    UNKNOWN --> REJECTED: business rejection confirmed
+    UNKNOWN --> FAILED: technical non-execution definitively established
 ```
 
 **Important:** `UNKNOWN -> FAILED` requires authoritative evidence. A timeout, absence of webhook, or exceeded retry budget by itself is **not** that evidence. Other retry/rollback transitions are deliberately left undefined.
 
-## 4. Payment outcome is not transport execution outcome
+## 4. Financial outcome versus technical/uncertain execution
 
-A PSP can return a definitive **authorization declined** decision. In this initial split, that may be represented as:
+[ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md) refines the original operation-status design: **a definitive response is not automatically a successful financial operation**.
 
-- `PaymentStatus = DECLINED` (business result).
-- `PaymentOperation(type=AUTHORIZE).status = SUCCEEDED` (the interaction completed and a definitive answer was recorded).
-- The operation's **business decision / result** must remain distinguishable from its processing status; its concrete field/enum is **not yet designed**.
+- An approved authorization is `Payment.status = AUTHORIZED` and `PaymentOperation(type=AUTHORIZE).status = SUCCEEDED`.
+- A declined authorization is `Payment.status = DECLINED` and `PaymentOperation(type=AUTHORIZE).status = REJECTED`; `psp_result_code` preserves the specific reason (e.g., `INSUFFICIENT_FUNDS`).
+- A definitive technical failure with reliable evidence of non-execution is `PaymentOperation.status = FAILED`; it does not imply the card was declined.
+- A missing or ambiguous PSP answer remains `PaymentOperation.status = UNKNOWN`; it does not override the Payment's last confirmed state.
 
-Conversely, an unresolved PSP request is represented on the **operation**, not by mutating the Payment to `PENDING_CONFIRMATION`.
+`REJECTED` is operation-generic, whereas `DECLINED` describes the Payment business result of an authorization rejection. The concrete PSP reason-code taxonomy is still open.
+
+An unresolved PSP request is represented on the **operation**, not by mutating the Payment to `PENDING_CONFIRMATION`.
 
 ### Examples
 
@@ -119,7 +126,7 @@ Conversely, an unresolved PSP request is represented on the **operation**, not b
 | --- | --- | --- |
 | Payment created; authorization request not confirmed | `CREATED` | `AUTHORIZE: PENDING / PROCESSING / UNKNOWN` |
 | Authorization confirmed | `AUTHORIZED` | `AUTHORIZE: SUCCEEDED` with approved outcome |
-| Authorization declined | `DECLINED` | `AUTHORIZE: SUCCEEDED` with declined outcome |
+| Authorization declined | `DECLINED` | `AUTHORIZE: REJECTED` (e.g., `INSUFFICIENT_FUNDS`) |
 | Capture request timed out after authorization | `AUTHORIZED` | `CAPTURE: UNKNOWN` |
 | Capture confirmed | `CAPTURED` | `CAPTURE: SUCCEEDED` with captured outcome |
 | Authorization void confirmed before capture | `CANCELED` | `VOID: SUCCEEDED` with canceled outcome |
@@ -155,7 +162,7 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - Confirmed expired authorizations are not capturable; expiration (`EXPIRED`) is distinct from explicit cancellation (`CANCELED`).
 - Repeated capture with the same request identity resolves to the original capture; a new identity against `CAPTURED` must be rejected ([BR-004](../requirement/BR-004-idempotent-capture-requests.md)).
 - Operations remaining `UNKNOWN` for 24 hours require reconciliation/escalation, **not** automatic cancellation/failure ([BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md)).
-- A definitive card decline is a business outcome; a technical failure with proof of non-execution is an operation failure, and a timeout alone is `UNKNOWN` ([BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md)).
+- A definitive card decline produces `AUTHORIZE: REJECTED` and `Payment: DECLINED`; a technical failure with proof of non-execution produces `FAILED` on the operation; a timeout alone is `UNKNOWN` ([BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md)).
 - The PSP HTTP financial attempt policy is **3 total attempts** with **5s, 10s, 20s per-request timeouts**, and only safe, PSP-idempotent retries are permitted. Exhaustion without a definitive PSP outcome means `UNKNOWN`, not `FAILED` ([BR-007](../requirement/BR-007-bounded-psp-retries.md)).
 - A previous unresolved operation blocks new **independent conflicting** financial operations; same-operation idempotent retry, safe status checks and reconciliation do not create new financial operations. No manual/API override is included in the MVP ([BR-008](../requirement/BR-008-block-conflicting-financial-operations.md)).
 
@@ -164,10 +171,11 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - Exact transition matrix and which statuses are terminal for the MVP.
 - Whether `PaymentStatus.FAILED` is needed for a terminal payment-level failure distinct from `DECLINED`; currently only `PaymentOperationStatus.FAILED` is defined.
 - Whether to add `AUTHORIZING` / `CAPTURING` to Payment (current decision: represent work on PaymentOperation instead).
-- Distinguishing an operation's processing status from PSP approval/decline result in a concrete model.
+- Final PSP result/reason-code taxonomy (separate from the agreed `SUCCEEDED` / `REJECTED` / `FAILED` / `UNKNOWN` lifecycle states).
 - Support for partial capture, multiple captures, refunds, chargebacks, and settlement outside the initial scope; exact expiration detection, timing, and reconciliation mechanics remain open.
-- Conditional updates / optimistic locking / uniqueness guarantees, concrete HTTP retry scheduling and error classification, and webhook ordering. **The 5s/10s/20s per-request timeout schedule is already approved** under BR-007.
+- Physical implementation of conditional updates / optimistic locking / uniqueness guarantees, concrete HTTP retry scheduling and error classification, and webhook ordering. **The 5s/10s/20s per-request timeout schedule is already approved** under BR-007.
 - Precise implementation of consumer idempotency and message schema.
+- The conceptual four-table data model and approved order/payment cardinality are documented in [Relational Data Model](relational-data-model.md); physical constraints are not implemented.
 - Audit trail and retention are now approved under [NFR-001](../requirement/NFR-001-transaction-traceability-and-retention.md) and [ADR-0002](../adr/0002-append-only-audit-and-retention.md): append-only durable audit records, 5-year financial/audit retention, 30-day logs, and 7-day Kafka message retention. **Schemas, purge mechanisms, retention clock and security controls remain to be designed.**
 
 We will decide these items during later system-design steps rather than silently locking them into this document.
