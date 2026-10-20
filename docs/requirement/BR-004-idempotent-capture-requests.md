@@ -3,7 +3,7 @@
 - **Type:** Business rule
 - **Status:** Accepted for MVP single full capture; implementation details pending
 - **Scope:** Card capture endpoint and PSP capture operations
-- **Related:** [BR-001](BR-001-idempotent-payment-requests.md), [BR-002](BR-002-uncertain-psp-outcomes.md)
+- **Related:** [BR-001](BR-001-idempotent-payment-requests.md), [BR-002](BR-002-uncertain-psp-outcomes.md), [BR-008](BR-008-block-conflicting-financial-operations.md)
 
 ## Business context
 
@@ -22,7 +22,7 @@ For this MVP, **only one full capture per authorization** is supported. Partial 
 3. Reusing the same key with different parameters is rejected as a conflict.
 4. Sending a **different key** to capture an already `CAPTURED` payment returns a specific conflict (`PAYMENT_ALREADY_CAPTURED`); it is not silently reported as a successful new capture.
 5. Concurrent capture attempts must be serialized or rejected through transactional/state/uniqueness controls; a status pre-check alone is insufficient.
-6. If a previous capture operation is `UNKNOWN`, a new independently identified capture must not begin until the original outcome is safely resolved (see [BR-002](BR-002-uncertain-psp-outcomes.md)).
+6. If a previous capture operation is `UNKNOWN`, a new independently identified capture must not begin until the original outcome is safely resolved (see [BR-002](BR-002-uncertain-psp-outcomes.md) and [BR-008](BR-008-block-conflicting-financial-operations.md)).
 
 ## Example response to a different key (proposed)
 
