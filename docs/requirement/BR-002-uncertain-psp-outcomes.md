@@ -3,7 +3,7 @@
 - **Type:** Business rule
 - **Status:** Agreed at the behavioral level; implementation details pending
 - **Scope:** Payment operations sent to an external Payment Service Provider (PSP)
-- **Related:** [BR-001 — Idempotent payment requests](BR-001-idempotent-payment-requests.md)
+- **Related:** [BR-001 — Idempotent payment requests](BR-001-idempotent-payment-requests.md); [Payment state machines](../domain/payment-state-machines.md)
 
 ## Business context
 
@@ -18,10 +18,10 @@ A missing response is **not evidence that the payment failed**.
 ### Expected behavior
 
 1. PaymentFlow identifies each external financial operation with a stable operation identity; when supported by the PSP, use a stable PSP idempotency key for safe retries.
-2. If the PSP request times out or its response is lost, the outcome is recorded as **unknown / pending confirmation**, not immediately as a definitive failure.
+2. If the PSP request times out or its response is lost, the corresponding `PaymentOperation` is recorded with status `UNKNOWN`, not immediately as a definitive failure. The `Payment` preserves its last confirmed financial status.
 3. PaymentFlow attempts to determine the operation result using an available reliable mechanism, such as a PSP status query or an authenticated PSP webhook.
 4. Retrying a PSP operation, when the provider supports safe retries, must reuse the **same PSP operation identity/idempotency key**, not invent a new charge identity.
-5. If the outcome remains unknown, the payment stays unresolved until additional evidence, reconciliation, or an explicit recovery workflow determines the next safe action.
+5. If the outcome remains unknown, the affected operation stays unresolved until additional evidence, reconciliation, or an explicit recovery workflow determines the next safe action; the Payment keeps its last confirmed business state.
 6. A later PSP confirmation must be correlated to the original operation and must not result in a duplicate financial effect.
 
 ## Example failure sequence
@@ -34,7 +34,7 @@ Client                PaymentFlow                  PSP
   |                         |                       | operation executed
   |                         |<--- response lost ------X
   |                         |
-  |                   outcome UNKNOWN
+  |             PaymentOperation UNKNOWN
   |                         |
   |                  query status / await webhook
   |                         |
@@ -53,10 +53,10 @@ A repeated client request using the original `Idempotency-Key` is governed by [B
 
 ## Boundaries and open design decisions
 
-**Established:** Timeout is not equivalent to failure; uncertain operations require correlation and safe recovery.
+**Established:** Timeout is not equivalent to failure; uncertain operations require correlation and safe recovery. The agreed domain model stores this uncertainty as `PaymentOperationStatus.UNKNOWN`, not as `PaymentStatus.PENDING_CONFIRMATION` (see [state machines](../domain/payment-state-machines.md)).
 
 **To decide during domain/architecture design:**
-- Final payment and external-operation status names (e.g., `PENDING_CONFIRMATION` is only a candidate).
+- Detailed resolution and retry transitions for operations that are `UNKNOWN`, including provider-specific evidence requirements.
 - PSP contract, including idempotency guarantees, query API, and webhook authentication.
 - Strategy for reconciling long-running unknown operations, timeouts, and manual intervention.
 - Concurrency control for PSP callbacks, polling, and Kafka consumer redelivery.
