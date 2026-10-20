@@ -3,7 +3,7 @@
 - **Status:** Agreed domain baseline (2026-10-20)
 - **Scope:** Payment lifecycle and external PSP operation lifecycle for the credit-card MVP
 - **Architecture decision:** [ADR-0001 — Separate Payment from PaymentOperation](../adr/0001-separate-payment-and-payment-operations.md)
-- **Related business rules:** [BR-001](../requirement/BR-001-idempotent-payment-requests.md), [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../requirement/BR-004-idempotent-capture-requests.md), [BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md), [BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
+- **Related business rules:** [BR-001](../requirement/BR-001-idempotent-payment-requests.md), [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../requirement/BR-004-idempotent-capture-requests.md), [BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md), [BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md), [BR-007](../requirement/BR-007-bounded-psp-retries.md), [BR-008](../requirement/BR-008-block-conflicting-financial-operations.md)
 
 ## Domain boundaries
 
@@ -156,6 +156,8 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - Repeated capture with the same request identity resolves to the original capture; a new identity against `CAPTURED` must be rejected ([BR-004](../requirement/BR-004-idempotent-capture-requests.md)).
 - Operations remaining `UNKNOWN` for 24 hours require reconciliation/escalation, **not** automatic cancellation/failure ([BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md)).
 - A definitive card decline is a business outcome; a technical failure with proof of non-execution is an operation failure, and a timeout alone is `UNKNOWN` ([BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md)).
+- The PSP HTTP financial attempt policy is **3 total attempts** with **5s, 10s, 20s per-request timeouts**, and only safe, PSP-idempotent retries are permitted. Exhaustion without a definitive PSP outcome means `UNKNOWN`, not `FAILED` ([BR-007](../requirement/BR-007-bounded-psp-retries.md)).
+- A previous unresolved operation blocks new **independent conflicting** financial operations; same-operation idempotent retry, safe status checks and reconciliation do not create new financial operations. No manual/API override is included in the MVP ([BR-008](../requirement/BR-008-block-conflicting-financial-operations.md)).
 
 ## 6. Still to decide (not approved yet)
 
@@ -164,7 +166,7 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - Whether to add `AUTHORIZING` / `CAPTURING` to Payment (current decision: represent work on PaymentOperation instead).
 - Distinguishing an operation's processing status from PSP approval/decline result in a concrete model.
 - Support for partial capture, multiple captures, refunds, chargebacks, and settlement outside the initial scope; exact expiration detection, timing, and reconciliation mechanics remain open.
-- Conditional updates / optimistic locking / uniqueness guarantees, operation retries and webhook ordering.
+- Conditional updates / optimistic locking / uniqueness guarantees, concrete HTTP retry scheduling and error classification, and webhook ordering. **The 5s/10s/20s per-request timeout schedule is already approved** under BR-007.
 - Precise implementation of consumer idempotency and message schema.
 - Audit trail and retention are now approved under [NFR-001](../requirement/NFR-001-transaction-traceability-and-retention.md) and [ADR-0002](../adr/0002-append-only-audit-and-retention.md): append-only durable audit records, 5-year financial/audit retention, 30-day logs, and 7-day Kafka message retention. **Schemas, purge mechanisms, retention clock and security controls remain to be designed.**
 
