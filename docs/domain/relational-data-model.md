@@ -3,7 +3,7 @@
 - **Status:** Accepted conceptual baseline; physical schema, migrations and API contracts not implemented
 - **Date:** 2026-10-20
 - **Scope:** Credit-card payments via simulated PSP
-- **References:** [State machines](payment-state-machines.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md)
+- **References:** [State machines](payment-state-machines.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md), [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
 - **Important:** This is **documentation**, not executable SQL, application code, or a commitment to a concrete migration.
 
 ## Summary and cardinality
@@ -127,14 +127,18 @@ The `sequence_number` should be unique per Payment and allocated under appropria
 
 Audit events and integration/outbox messages have distinct purposes. Kafka's seven-day message retention must not determine audit availability.
 
-## Additional tables reserved for later
+## Integration tables: decision and scope
 
-| Future table | Intent | Trigger for design |
+The **four principal tables above remain the approved core domain model**. Subsequent [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md) approved the **Transactional Outbox** as a required logical persistence mechanism for reliable, asynchronous Kafka publication:
+
+| Additional table | Status | Responsibility |
 | --- | --- | --- |
-| `outbox_events` | Reliably publish committed business changes to Kafka after the database transaction. | Kafka integration design. |
-| `psp_webhook_inbox` | Deduplicate, store and safely process PSP callbacks. | PSP simulator/webhook design. |
+| `outbox_events` | **Architectural pattern accepted (ADR-0004)**; columns, constraints, and delivery mechanism not yet designed. | Persist publication intent in the **same database transaction** as accepted Payment/PaymentOperation/idempotency/audit changes, so a committed payment cannot lose its processing intent on a subsequent Kafka failure. |
+| `psp_webhook_inbox` | **Candidate for future design**; not yet approved. | Deduplicate and process PSP callbacks safely if/when the PSP webhook contract is designed. |
 
-These are **not part of the four-table conceptual MVP baseline being approved now**. No topics, payloads, webhook storage schema, or infrastructure are created by this document.
+The Outbox is **additional supporting infrastructure data**, not a fifth independent payment-domain aggregate. Its rows are different from the durable `payment_audit_events` records and can be published more than once after crashes. Exact topics, payloads, delivery strategy, retention, and implementation remain open.
+
+No SQL, runtime services, event payloads or infrastructure are created by this document.
 
 ## Explicitly pending (not silent implementation commitments)
 
