@@ -64,6 +64,7 @@ Documentation is the source of truth for decisions made during the system-design
 - [ADR-0001 — Separate Payment from PaymentOperation](docs/adr/0001-separate-payment-and-payment-operations.md) — rationale, rejected alternatives, and consequences.
 - [ADR-0002 — Append-only audit and retention](docs/adr/0002-append-only-audit-and-retention.md) — database audit history, rationale and retention boundaries.
 - [ADR-0003 — Separate operation success from rejection](docs/adr/0003-distinguish-financial-success-from-rejection.md) — why `REJECTED` is distinct from `SUCCEEDED`, `FAILED`, and `UNKNOWN`.
+- [ADR-0004 — Synchronous acceptance, asynchronous PSP processing](docs/adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md) — synchronous durable API acknowledgment, Transactional Outbox, Kafka delivery and asynchronous PSP execution.
 
 Future system-design artifacts (functional/non-functional requirements, high-level architecture, event contracts, failure analysis, and further ADRs) will be added **as they are discussed and approved**.
 
@@ -84,4 +85,4 @@ All payment credentials, card tokens, and PSP interactions in this repository mu
 
 ## Current milestone
 
-BR-001 through BR-008 and NFR-001 are documented. Payment/PaymentOperation state machines, append-only audit retention, bounded PSP HTTP attempt timeouts (5s/10s/20s), and blocking of conflicting unresolved operations are agreed. The conceptual four-table relational model and PSP outcome semantics are now documented. Next, refine **physical concurrency/uniqueness constraints**, idempotency-key expiry, and remaining failure scenarios before choosing a service topology or writing production code.
+BR-001 through BR-008 and NFR-001 are documented. Payment/PaymentOperation state machines, append-only audit retention, bounded PSP HTTP attempt timeouts (5s/10s/20s), and blocking of conflicting unresolved operations are agreed. The conceptual four-table relational model and PSP outcome semantics are documented. **ADR-0004 approves synchronous durable request acceptance and asynchronous PSP execution via Transactional Outbox and Kafka.** Next, discuss Kafka event contracts/topics, partitioning, consumer groups and offset/duplicate handling, plus the outstanding physical constraints and API contracts. No implementation code is authorized at this documentation-only stage.
