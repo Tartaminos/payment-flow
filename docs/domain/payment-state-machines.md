@@ -3,7 +3,7 @@
 - **Status:** Agreed domain baseline (2026-10-20)
 - **Scope:** Payment lifecycle and external PSP operation lifecycle for the credit-card MVP
 - **Architecture decision:** [ADR-0001 — Separate Payment from PaymentOperation](../adr/0001-separate-payment-and-payment-operations.md)
-- **Related business rules:** [BR-001](../requirement/BR-001-idempotent-payment-requests.md), [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md)
+- **Related business rules:** [BR-001](../requirement/BR-001-idempotent-payment-requests.md), [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../requirement/BR-004-idempotent-capture-requests.md), [BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md), [BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
 
 ## Domain boundaries
 
@@ -26,7 +26,8 @@ public enum PaymentStatus {
     AUTHORIZED,
     CAPTURED,
     DECLINED,
-    CANCELED
+    CANCELED,
+    EXPIRED
 }
 ```
 
@@ -36,7 +37,8 @@ public enum PaymentStatus {
 | `AUTHORIZED` | The PSP has confirmed authorization; funds are not yet confirmed captured. |
 | `CAPTURED` | The PSP has confirmed capture, but settlement is not implied. |
 | `DECLINED` | The PSP definitively declined authorization. |
-| `CANCELED` | Cancellation/void has been confirmed for an authorization before capture. |
+| `CANCELED` | Cancellation/void has been explicitly requested and confirmed for an authorization before capture. |
+| `EXPIRED` | The authorization expired before capture, confirmed according to the PSP contract. Expiration is not an explicit void. |
 
 ### Agreed primary transitions
 
@@ -47,9 +49,10 @@ stateDiagram-v2
     CREATED --> DECLINED: authorization declined
     AUTHORIZED --> CAPTURED: capture confirmed
     AUTHORIZED --> CANCELED: void/cancellation confirmed
+    AUTHORIZED --> EXPIRED: authorization expiry confirmed
 ```
 
-Only these **primary happy-path/business transitions** have been agreed. This is not yet a complete transition matrix for every failure, cancellation request, expiration, or future refund.
+Only these **primary business transitions** have been agreed. This is not yet a complete transition matrix for every failure, cancellation request, expiry race, or future refund. Capture against a definitively expired authorization is blocked with proposed HTTP `409` / `AUTHORIZATION_EXPIRED` ([BR-003](../requirement/BR-003-expired-authorizations.md)).
 
 ## 2. PaymentOperationType
 
@@ -120,6 +123,9 @@ Conversely, an unresolved PSP request is represented on the **operation**, not b
 | Capture request timed out after authorization | `AUTHORIZED` | `CAPTURE: UNKNOWN` |
 | Capture confirmed | `CAPTURED` | `CAPTURE: SUCCEEDED` with captured outcome |
 | Authorization void confirmed before capture | `CANCELED` | `VOID: SUCCEEDED` with canceled outcome |
+| Authorization expiry confirmed before capture | `EXPIRED` | No new capture operation is allowed; expiration is tracked as a business transition |
+| Confirmed technical failure to authorize, no execution | `CREATED` | `AUTHORIZE: FAILED` |
+| Capture already completed, replayed with same key | `CAPTURED` | Existing `CAPTURE: SUCCEEDED`; no duplicate PSP charge |
 
 ### Why we do not store `PENDING_CONFIRMATION` on Payment
 
@@ -146,6 +152,10 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - The Payment status must reflect **confirmed business facts**; unresolved PSP execution belongs to the PaymentOperation.
 - Authorization and capture have **separate external operation identities** and separate idempotency boundaries.
 - A Payment transition is applied only from an eligible, correlated and confirmed result; duplicated or out-of-order messages must not cause repeated side effects.
+- Confirmed expired authorizations are not capturable; expiration (`EXPIRED`) is distinct from explicit cancellation (`CANCELED`).
+- Repeated capture with the same request identity resolves to the original capture; a new identity against `CAPTURED` must be rejected ([BR-004](../requirement/BR-004-idempotent-capture-requests.md)).
+- Operations remaining `UNKNOWN` for 24 hours require reconciliation/escalation, **not** automatic cancellation/failure ([BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md)).
+- A definitive card decline is a business outcome; a technical failure with proof of non-execution is an operation failure, and a timeout alone is `UNKNOWN` ([BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md)).
 
 ## 6. Still to decide (not approved yet)
 
@@ -153,8 +163,9 @@ PaymentFlow knows authorization was confirmed, but **does not know** whether cap
 - Whether `PaymentStatus.FAILED` is needed for a terminal payment-level failure distinct from `DECLINED`; currently only `PaymentOperationStatus.FAILED` is defined.
 - Whether to add `AUTHORIZING` / `CAPTURING` to Payment (current decision: represent work on PaymentOperation instead).
 - Distinguishing an operation's processing status from PSP approval/decline result in a concrete model.
-- Support for partial capture, multiple captures, void expiration, refunds, chargebacks, settlement, and reconciliation outside the initial scope.
+- Support for partial capture, multiple captures, refunds, chargebacks, and settlement outside the initial scope; exact expiration detection, timing, and reconciliation mechanics remain open.
 - Conditional updates / optimistic locking / uniqueness guarantees, operation retries and webhook ordering.
 - Precise implementation of consumer idempotency and message schema.
+- Audit trail representation, event retention periods, sensitive-data minimization and storage strategy; these have **not** yet been approved.
 
 We will decide these items during later system-design steps rather than silently locking them into this document.
