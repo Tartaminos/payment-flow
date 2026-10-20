@@ -46,6 +46,10 @@ Documentation is the source of truth for decisions made during the system-design
 | --- | --- |
 | [BR-001](docs/requirement/BR-001-idempotent-payment-requests.md) | Repeated equivalent payment requests must not create a second financial operation. |
 | [BR-002](docs/requirement/BR-002-uncertain-psp-outcomes.md) | An uncertain PSP outcome must not be treated as failure or blindly retried as a new operation. |
+| [BR-003](docs/requirement/BR-003-expired-authorizations.md) | Confirmed expired authorizations cannot be captured. |
+| [BR-004](docs/requirement/BR-004-idempotent-capture-requests.md) | Capture retries are idempotent and new captures after a completed capture are rejected. |
+| [BR-005](docs/requirement/BR-005-reconciliation-after-24h-unknown.md) | An operation still UNKNOWN after 24 hours requires reconciliation, not automatic cancellation. |
+| [BR-006](docs/requirement/BR-006-distinguish-technical-failure-from-decline.md) | Definitive technical failure, authorization decline, and uncertain outcome must remain distinct. |
 
 ### Domain design and decisions
 
@@ -71,4 +75,4 @@ All payment credentials, card tokens, and PSP interactions in this repository mu
 
 ## Current milestone
 
-BR-001 and BR-002 are documented; the initial Payment and PaymentOperation state-machine split is agreed. Next, refine the remaining transitions, invariants, and failure modes **before** choosing a service topology or writing production code.
+BR-001 through BR-006 are documented; the Payment and PaymentOperation separation and primary transitions (including authorization expiry) are agreed. Next, refine the remaining invariants and failure modes, plus an audit-trail/retention policy, **before** choosing the final service topology or writing production code.
