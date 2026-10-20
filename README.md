@@ -47,7 +47,12 @@ Documentation is the source of truth for decisions made during the system-design
 | [BR-001](docs/requirement/BR-001-idempotent-payment-requests.md) | Repeated equivalent payment requests must not create a second financial operation. |
 | [BR-002](docs/requirement/BR-002-uncertain-psp-outcomes.md) | An uncertain PSP outcome must not be treated as failure or blindly retried as a new operation. |
 
-Future system-design artifacts (functional/non-functional requirements, domain model, state transitions, high-level architecture, event contracts, failure analysis, and ADRs) will be added **as they are discussed and approved**.
+### Domain design and decisions
+
+- [Payment and PaymentOperation state machines](docs/domain/payment-state-machines.md) — agreed business/operation statuses, primary transitions, examples, and explicit open questions.
+- [ADR-0001 — Separate Payment from PaymentOperation](docs/adr/0001-separate-payment-and-payment-operations.md) — rationale, rejected alternatives, and consequences.
+
+Future system-design artifacts (functional/non-functional requirements, high-level architecture, event contracts, failure analysis, and further ADRs) will be added **as they are discussed and approved**.
 
 ## Proposed technical direction (not yet an implementation decision)
 
@@ -66,4 +71,4 @@ All payment credentials, card tokens, and PSP interactions in this repository mu
 
 ## Current milestone
 
-Document the payment invariants, define a valid payment state machine, and examine failure modes **before** choosing the final service topology or writing production code.
+BR-001 and BR-002 are documented; the initial Payment and PaymentOperation state-machine split is agreed. Next, refine the remaining transitions, invariants, and failure modes **before** choosing a service topology or writing production code.
