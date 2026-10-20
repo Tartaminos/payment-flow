@@ -22,7 +22,7 @@ However:
 
 Model **Payment** separately from **PaymentOperation**, with independent state machines.
 
-- `Payment.status` uses the MVP business states: `CREATED`, `AUTHORIZED`, `CAPTURED`, `DECLINED`, `CANCELED`.
+- `Payment.status` uses the MVP business states: `CREATED`, `AUTHORIZED`, `CAPTURED`, `DECLINED`, `CANCELED`, `EXPIRED` (added after BR-003 was accepted).
 - A `PaymentOperation` has its own identity, references its Payment, and carries `type` (`AUTHORIZE`, `CAPTURE`, `VOID`) and `status`.
 - `PaymentOperation.status` uses: `PENDING`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `UNKNOWN`.
 - `PaymentOperationStatus` is a value/enum, not a third entity.
