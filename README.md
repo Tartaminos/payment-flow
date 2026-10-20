@@ -51,10 +51,15 @@ Documentation is the source of truth for decisions made during the system-design
 | [BR-005](docs/requirement/BR-005-reconciliation-after-24h-unknown.md) | An operation still UNKNOWN after 24 hours requires reconciliation, not automatic cancellation. |
 | [BR-006](docs/requirement/BR-006-distinguish-technical-failure-from-decline.md) | Definitive technical failure, authorization decline, and uncertain outcome must remain distinct. |
 
+### Non-functional requirements
+
+- [NFR-001 — Transaction Traceability and Audit Retention](docs/requirement/NFR-001-transaction-traceability-and-retention.md) — durable payment audit trail; **5 years** financial/audit history, **30 days** technical logs, **7 days** Kafka messages.
+
 ### Domain design and decisions
 
 - [Payment and PaymentOperation state machines](docs/domain/payment-state-machines.md) — agreed business/operation statuses, primary transitions, examples, and explicit open questions.
 - [ADR-0001 — Separate Payment from PaymentOperation](docs/adr/0001-separate-payment-and-payment-operations.md) — rationale, rejected alternatives, and consequences.
+- [ADR-0002 — Append-only audit and retention](docs/adr/0002-append-only-audit-and-retention.md) — database audit history, rationale and retention boundaries.
 
 Future system-design artifacts (functional/non-functional requirements, high-level architecture, event contracts, failure analysis, and further ADRs) will be added **as they are discussed and approved**.
 
@@ -75,4 +80,4 @@ All payment credentials, card tokens, and PSP interactions in this repository mu
 
 ## Current milestone
 
-BR-001 through BR-006 are documented; the Payment and PaymentOperation separation and primary transitions (including authorization expiry) are agreed. Next, refine the remaining invariants and failure modes, plus an audit-trail/retention policy, **before** choosing the final service topology or writing production code.
+BR-001 through BR-006 and NFR-001 are documented. Payment/PaymentOperation state machines and the append-only financial audit approach, including retention periods, are agreed. Next, refine remaining business invariants and failure scenarios **before** choosing a service topology or writing production code.
