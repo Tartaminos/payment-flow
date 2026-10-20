@@ -1,7 +1,7 @@
 # BR-006 — Distinguish PSP technical failure from payment decline
 
 - **Type:** Business rule
-- **Status:** Accepted at the behavioral level; PSP outcome model pending
+- **Status:** Accepted, refined by [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md); detailed PSP error taxonomy pending
 - **Scope:** Authorization, payment outcomes, and PSP integration failures
 - **Related:** [Payment state machines](../domain/payment-state-machines.md), [BR-002](BR-002-uncertain-psp-outcomes.md)
 
@@ -13,7 +13,7 @@ A connection timeout is neither: it creates uncertainty rather than a confirmed 
 
 ## Requirement
 
-> PaymentFlow must distinguish financial rejection (`PaymentStatus.DECLINED`), definitive technical execution failure (`PaymentOperationStatus.FAILED`), and unknown outcome (`PaymentOperationStatus.UNKNOWN`).
+> PaymentFlow must distinguish definitive business rejection (`PaymentOperationStatus.REJECTED`), successful financial execution (`PaymentOperationStatus.SUCCEEDED`), definitive technical non-execution (`PaymentOperationStatus.FAILED`), and uncertain outcome (`PaymentOperationStatus.UNKNOWN`). Card authorization rejection also maps to `PaymentStatus.DECLINED`.
 
 ## Expected behavior
 
@@ -22,10 +22,10 @@ A connection timeout is neither: it creates uncertainty rather than a confirmed 
 Example PSP result: `DECLINED` with reason `INSUFFICIENT_FUNDS`.
 
 - `Payment.status = DECLINED`.
-- `PaymentOperation(type=AUTHORIZE).status = SUCCEEDED` **when SUCCEEDED means that the interaction obtained a definitive business answer**.
-- The operation must additionally record a distinguishable business decision/result `DECLINED` (exact data model remains open).
+- `PaymentOperation(type=AUTHORIZE).status = REJECTED`.
+- The operation retains the provider's specific rejection reason, e.g. `psp_result_code = INSUFFICIENT_FUNDS`.
 
-Here `SUCCEEDED` never means that the card was approved.
+`SUCCEEDED` is reserved for a **confirmed successful financial operation**; receiving a definitive decline does not count as operation success.
 
 ### B. Definitive technical failure
 
@@ -47,14 +47,14 @@ Example: request times out, response is lost, or PSP provides an ambiguous respo
 
 ## Acceptance criteria
 
-- **AC-001:** A definitive card decline results in `PaymentStatus.DECLINED`, not technical `FAILED`.
+- **AC-001:** A definitive card decline results in `PaymentStatus.DECLINED` and `PaymentOperationStatus.REJECTED`, never `SUCCEEDED` or technical `FAILED`.
 - **AC-002:** A definitive technical rejection with proof of no execution results in `PaymentOperationStatus.FAILED` and does not falsely mark the card as declined.
 - **AC-003:** A timeout or ambiguous HTTP error alone cannot be classified as definitive failure.
-- **AC-004:** Operation processing status and the PSP's business decision are distinguishable in audit records.
+- **AC-004:** Audit records distinguish financially successful operations (`SUCCEEDED`) from definitively rejected business operations (`REJECTED`) and include sanitized PSP-specific reason codes where available.
 - **AC-005:** A technical failure does not erase the last confirmed Payment business status.
 
 ## Open design decisions
 
-- Concrete representation of PSP business outcomes and error codes, distinct from `PaymentOperationStatus`.
+- Concrete provider-specific business result/rejection/error-code taxonomy (`psp_result_code`, etc.) distinct from the standardized `PaymentOperationStatus` enum.
 - Failure classification and which technical errors permit safe retries.
 - PSP simulator contracts that supply authoritative evidence of no execution.
