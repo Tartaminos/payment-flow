@@ -59,9 +59,11 @@ Documentation is the source of truth for decisions made during the system-design
 
 ### Domain design and decisions
 
-- [Payment and PaymentOperation state machines](docs/domain/payment-state-machines.md) — agreed business/operation statuses, primary transitions, examples, and explicit open questions.
+- [Payment and PaymentOperation state machines](docs/domain/payment-state-machines.md) — approved business and operation states, including `REJECTED`, and their primary transitions.
+- [Relational data model](docs/domain/relational-data-model.md) — four approved conceptual tables, fields, relationships, and cardinality, with implementation choices clearly identified.
 - [ADR-0001 — Separate Payment from PaymentOperation](docs/adr/0001-separate-payment-and-payment-operations.md) — rationale, rejected alternatives, and consequences.
 - [ADR-0002 — Append-only audit and retention](docs/adr/0002-append-only-audit-and-retention.md) — database audit history, rationale and retention boundaries.
+- [ADR-0003 — Separate operation success from rejection](docs/adr/0003-distinguish-financial-success-from-rejection.md) — why `REJECTED` is distinct from `SUCCEEDED`, `FAILED`, and `UNKNOWN`.
 
 Future system-design artifacts (functional/non-functional requirements, high-level architecture, event contracts, failure analysis, and further ADRs) will be added **as they are discussed and approved**.
 
@@ -82,4 +84,4 @@ All payment credentials, card tokens, and PSP interactions in this repository mu
 
 ## Current milestone
 
-BR-001 through BR-008 and NFR-001 are documented. Payment/PaymentOperation state machines, append-only audit retention, bounded PSP HTTP attempt timeouts (5s/10s/20s), and blocking of conflicting unresolved operations are agreed. Next, finalize the relational data model, constraints and remaining failure scenarios **before** choosing a service topology or writing production code.
+BR-001 through BR-008 and NFR-001 are documented. Payment/PaymentOperation state machines, append-only audit retention, bounded PSP HTTP attempt timeouts (5s/10s/20s), and blocking of conflicting unresolved operations are agreed. The conceptual four-table relational model and PSP outcome semantics are now documented. Next, refine **physical concurrency/uniqueness constraints**, idempotency-key expiry, and remaining failure scenarios before choosing a service topology or writing production code.
