@@ -24,9 +24,9 @@ Two command shapes were considered: separate `AuthorizePayment`, `CapturePayment
 - The API/Transactional Outbox remains responsible for durably admitting the request **before** publishing the command. This decision does not authorize fire-and-forget publication without a stored PaymentOperation.
 - One generic **logical command type** does not imply one physical worker process, one consumer instance or one mandatory Kafka topic. Topic names, partitioning and consumer groups remain separate decisions.
 
-### Illustrative command envelope — not yet approved as a schema
+### Illustrative command envelope — initial proposal, subsequently refined
 
-The following example is **for discussion only**, not a finalized serialized contract:
+The following example captured the initial discussion; **[ADR-0011](0011-execute-payment-operation-command-envelope.md) subsequently approved the conceptual field responsibilities and current envelope**. This older example is **not** the finalized on-wire format:
 
 ```json
 {
@@ -41,7 +41,7 @@ The following example is **for discussion only**, not a finalized serialized con
 }
 ```
 
-Only the **single logical command and its reference to an existing PaymentOperation** are approved here. Exact JSON fields, mandatory/optional attributes, UUID serialization, naming, version rules, timestamps, authentication context, event/message IDs, retries metadata and schema format are **open**. The example does not imply that including `paymentId` or `operationType` is mandatory in Kafka.
+This ADR establishes the **generic command type**, not its transport schema. The **separate [ADR-0011](0011-execute-payment-operation-command-envelope.md)** approves required conceptual fields (`messageId`, `commandType`, `schemaVersion`, `operationId`, `correlationId`, `occurredAt`) and optional `causationId`; `paymentId` in the message body remains undecided and `operationType` is not required. On-wire encoding, Kafka headers, field-format validation and schema evolution are still open.
 
 Keep the command minimal and free from sensitive cardholder data. The PostgreSQL Payment/PaymentOperation records are the authoritative sources for monetary amount, current status, operation type, stable PSP identity, and PSP HTTP attempt count.
 
@@ -79,7 +79,7 @@ The architecture already records append-only financial/audit facts in PostgreSQL
 - Consumers need a single coherent dispatch boundary while retaining **explicit type-specific checks** for authorization, capture and void.
 - The command payload can remain compact because financial operation state is already durable in PostgreSQL. This deliberately creates a database read dependency in the processor (consistent with the approved architecture).
 - A generic command requires clear validation of unsupported `PaymentOperation.type` values and safe quarantine of malformed/incompatible messages.
-- **Next decision:** final command/event envelope: stable IDs, correlation/causation, time, schema version, minimally required references and compatibility policy.
+- **Accepted subsequently:** the conceptual command envelope, message identities and optional causation were approved in [ADR-0011](0011-execute-payment-operation-command-envelope.md). **Next decision:** serialization and schema evolution/compatibility policy.
 - **Other deferred decisions:** finalized topic name, partition key, consumer groups, physical event serialization format, validation rules, replay metadata, authorization/security fields, ownership of result events and any additional domain-event topics.
 
 ## Documentation-only boundary
