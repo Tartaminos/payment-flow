@@ -109,7 +109,7 @@ The exact version naming scheme (including whether to change command type or Kaf
 
 ## Open decisions
 
-- **Resolved by [ADR-0013](0013-apache-avro-schema-registry-full-transitive.md):** Apache Avro plus Schema Registry with `FULL_TRANSITIVE`; exact registry product, subject naming and governance implementation remain open.
+- **Resolved by [ADR-0013](0013-apache-avro-schema-registry-full-transitive.md):** Apache Avro plus Schema Registry with `FULL_TRANSITIVE`. **[ADR-0014](0014-record-name-strategy-for-kafka-avro-subjects.md) selects `RecordNameStrategy` for value subjects.** Exact registry product, Avro names/namespaces and governance implementation remain open.
 - Define the exact `schemaVersion` interpretation, version compatibility checking mechanics and supported-version lifecycle.
 - Define serialization of IDs/timestamps, unknown-field validation, and placement of metadata in Kafka headers versus body.
 - Finalize `paymentId` placement and Kafka partition key, topic and consumer group contracts.
