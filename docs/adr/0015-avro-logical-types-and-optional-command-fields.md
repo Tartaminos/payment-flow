@@ -17,7 +17,6 @@ Adopt the following **conceptual Avro field representations** for the first comm
 | --- | --- | --- | --- |
 | `messageId` | Yes | `{"type":"string","logicalType":"uuid"}` | One logical message publication; see ADR-0011. |
 | `commandType` | Yes | `"string"` | Expected command discriminator: `ExecutePaymentOperation`; validate its value. |
-| `schemaVersion` | Yes, **for now** | `"int"` | Previously approved logical contract version; whether to retain it given Schema Registry is the **next decision**, not resolved here. |
 | `operationId` | Yes | `{"type":"string","logicalType":"uuid"}` | Original, stable financial operation reference. |
 | `correlationId` | Yes | `{"type":"string","logicalType":"uuid"}` | Correlation across the request and processing flow. |
 | `occurredAt` | Yes | `{"type":"long","logicalType":"timestamp-millis"}` | Instant this command publication was created. |
@@ -29,7 +28,7 @@ The accepted `uuid` logical type is carried by Avro `string`; the `timestamp-mil
 
 ## Conceptual Avro record representation
 
-The following block belongs **only in this Markdown ADR**. It demonstrates the approved field choices but is **not an authorized `.avsc` file** or registered production schema. The namespace `com.paymentflow.commands` is **illustrative**, not a finalized naming commitment.
+The following block reflects the current field set as amended by [ADR-0016](0016-remove-redundant-command-schema-version.md) and belongs **only in this Markdown ADR**. It demonstrates the approved field choices but is **not an authorized `.avsc` file** or registered production schema. The namespace `com.paymentflow.commands` is **illustrative**, not a finalized naming commitment.
 
 ```json
 {
@@ -44,10 +43,6 @@ The following block belongs **only in this Markdown ADR**. It demonstrates the a
     {
       "name": "commandType",
       "type": "string"
-    },
-    {
-      "name": "schemaVersion",
-      "type": "int"
     },
     {
       "name": "operationId",
@@ -79,7 +74,7 @@ The actual Kafka wire representation is **binary Avro**, not this JSON declarati
 - A field default participates in **reader/writer schema resolution** when a field is absent in an *older writer schema*. It does **not** mean a producer can omit that field arbitrarily when writing a record whose own writer schema requires it.
 - Older readers may ignore compatible newly written fields, but **Avro schema compatibility is not proof of business correctness**. Changes to `operationId`, financial meaning, identity semantics or validation are high-risk even when the schema is accepted.
 - `commandType` stays a string for the single accepted generic command, not an Avro enum: an unexpected value remains a validation concern and must never be interpreted as authorization to perform a different PSP operation.
-- `schemaVersion` remains temporarily in the envelope because ADR-0011 requires it; **do not equate its integer with a Schema Registry schema ID or subject version** without a later explicit mapping.
+- **[ADR-0016](0016-remove-redundant-command-schema-version.md) subsequently removes `schemaVersion` from this command.** Schema Registry writer-schema identity now governs structural versioning; do not recreate the removed field without a separately approved business-semantic purpose.
 - `operationType` is not needed in the command envelope: the database owns the authoritative `PaymentOperation.type`. `paymentId` remains undecided in the payload and as a Kafka partition-key candidate.
 - The financial execution rules remain governed by the Payment/PaymentOperation records, transaction guards, provider idempotency and reconciliation, **not** by schema validation.
 
@@ -99,7 +94,7 @@ The actual Kafka wire representation is **binary Avro**, not this JSON declarati
 
 ## Explicitly open
 
-1. **Next decision:** keep `schemaVersion` in the Avro payload, reassign it to a semantic command version, or revise ADR-0011 to rely on Schema Registry identity for structural versions.
+1. **Resolved by [ADR-0016](0016-remove-redundant-command-schema-version.md):** remove the redundant `schemaVersion` from the Avro command payload; use Schema Registry identity for structural versions. A distinct business-semantic version remains unapproved.
 2. Placement of metadata in Kafka **headers vs. Avro value**, including whether all listed fields stay in the value.
 3. Final Avro namespace and record name, UUID lexical validation and Java binding configuration.
 4. `paymentId` as payload attribute and/or Kafka record **partition key**, key serialization and partition count.
