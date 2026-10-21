@@ -34,7 +34,7 @@ Keeping an application-maintained structural schema version in the payload along
 | `correlationId` | Required | `string` with `logicalType: uuid`; flow trace identity. |
 | `occurredAt` | Required | `long` with `logicalType: timestamp-millis`; command publication creation instant. |
 | `causationId` | Optional | Nullable `null` / `string` logical `uuid` union with default `null`. |
-| `paymentId` | Not decided | Still a possible Kafka record key and/or payload field, subject to a later decision. |
+| `paymentId` | **Kafka key accepted in [ADR-0018](0018-payment-id-as-kafka-command-partition-key.md); Avro value undecided** | Stable Kafka partition key for `ExecutePaymentOperation` publications. Whether also included in the value remains open. |
 | `schemaVersion` | **Removed** | Not part of the command contract; structural versions are managed by Schema Registry. |
 
 The following example shows the **revised logical content**. JSON is for explanation; Kafka command serialization uses **Avro**:
@@ -73,7 +73,7 @@ The `causationId` may be omitted from a **conceptual JSON depiction**, but the a
 ## Open decisions
 
 - Final Avro record name/namespace, physical `.avsc` layout and validation rules.
-- Kafka key (`paymentId` candidate), partitioning and consumer groups. **[ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md) subsequently establishes the Avro value as the authoritative command and headers as optional transport/observability metadata**; exact optional header names remain open.
+- **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) chooses `paymentId` as the Kafka command key.** Key encoding, partitioning and consumer groups remain undecided. **[ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md) subsequently establishes the Avro value as the authoritative command and headers as optional transport/observability metadata**; exact optional header names remain open.
 - How writer schema IDs and registry subjects are resolved and preserved in the Outbox, persistent Retry Scheduler, DLQ and controlled redrive paths.
 - Whether a future business-semantic protocol version is required; **none is currently approved**.
 - Registry implementation, operational configuration and migration/retention of historical schemas.
