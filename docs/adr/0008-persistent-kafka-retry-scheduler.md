@@ -82,7 +82,7 @@ A possible dispatch strategy is to register a **new Outbox publication intent** 
 
 - **Scheduling is not a financial result.** Recording, dispatching or completing a Kafka retry schedule does not change `Payment.status` to `AUTHORIZED`, `CAPTURED`, `DECLINED` or `FAILED` on its own.
 - **Kafka retry attempt counts and PSP HTTP attempt counts are separate**. A reprocessed Kafka message must never reset the PSP three-attempt budget or invent a new independent financial operation.
-- Original `eventId`, `operationId` and `paymentId` (where available) must remain traceable through retries; the deduplication identity of each scheduled work item and its retries needs a stable, deterministic contract.
+- Command publication `messageId` and the stable `operationId`/`correlationId` follow [ADR-0011](0011-execute-payment-operation-command-envelope.md); `paymentId` remains available from the database and its placement in a message is not yet fixed. The deduplication identity of each scheduled work item and its retries still needs a stable, deterministic contract.
 - **Durable-before-ack:** every Kafka offset commit is preceded by the durable business outcome or independently recoverable handoff defined in ADR-0005.
 - The scheduler is responsible for **time eligibility**, while Payment Processor/database rules are responsible for **financial eligibility**. These are independent checks.
 - Delayed work can be re-ordered across Kafka topics. Never use partition order as a substitute for authoritative payment and operation-state validation.
