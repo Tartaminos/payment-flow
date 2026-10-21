@@ -19,7 +19,7 @@ A Kafka record has separate **key**, **value** and **headers**. We must decide w
 - The **Kafka headers** may carry complementary technical metadata (e.g., distributed-tracing propagation or other diagnostic context), but **no header is required to establish the command's financial identity or interpret its business intent**. Exact header names, content, serialization and whether any will actually be emitted are **not approved by this ADR**.
 - Financial processing never trusts headers over the authoritative Avro command and persisted PostgreSQL state. If an identifier is duplicated into a future observability header, that copy is **non-authoritative**; mismatch detection and diagnostic handling must be designed rather than silently using it to choose a different financial operation.
 - **No mandatory command field is moved exclusively to a Kafka header**. This enables processing/reconstruction of command context using its Avro value and the writer schema identity needed for decoding, even if nonessential headers are absent.
-- The **Kafka record key is a separate concern**, not a header or an Avro-value replacement. Whether to use `paymentId` as key and whether to include it as a value field remain open. Key design will consider partition ordering and distribution later.
+- The **Kafka record key is a separate concern**, not a header or an Avro-value replacement. **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) subsequently selects `paymentId` as the key for `ExecutePaymentOperation` command records**, leaving its exact encoding and whether to include it in the Avro value open.
 - **Schema Registry identity is separate from business metadata.** The Avro serializer/wire format must provide sufficient writer schema information to deserialize a record; ADR-0016 removed `schemaVersion` from the command. The exact on-wire schema-ID mechanism is still an implementation decision.
 - `operationType`, PSP idempotency identity, financial status and amount remain **authoritative in PostgreSQL**, not in transport metadata or the command value.
 - Retry attempts, error diagnostics and scheduling times are **technical workflow metadata**. They must be stored/recovered under the approved persistent scheduler and retry contracts; this ADR does not require those attributes to be inserted into the financial command or rely on ephemeral Kafka headers as their only durable store.
@@ -30,7 +30,7 @@ The following is an **illustrative representation**, not an approved JSON wire e
 
 ```text
 Kafka record
-├── key:            TBD (paymentId is a candidate)
+├── key:            paymentId (ADR-0018; encoding TBD)
 ├── headers:        optional trace/transport metadata (exact list TBD)
 └── value:          Avro: ExecutePaymentOperation
     ├── messageId:      uuid
@@ -72,7 +72,7 @@ The command identifies **which existing financial operation may be considered fo
 
 ## Open decisions
 
-- Kafka key and partition strategy (`paymentId` remains a candidate), and whether to duplicate `paymentId` in the Avro value.
+- **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) selects `paymentId` as the Kafka command key.** Exact key serialization, partitioner/count/operational changes and whether to duplicate `paymentId` in the Avro value remain open.
 - Final Avro record name/namespace, physical schema definition and validation.
 - The actual optional Kafka headers, naming/encoding and propagation rules (including tracing), plus duplicate-field mismatch treatment.
 - Wire schema identity/serializer mechanics, schema caching, registry outage recovery and retained-schema lifecycle.
