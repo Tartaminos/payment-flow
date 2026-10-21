@@ -3,7 +3,7 @@
 - **Status:** Accepted conceptual baseline; physical schema, migrations and API contracts not implemented
 - **Date:** 2026-10-20
 - **Scope:** Credit-card payments via simulated PSP
-- **References:** [State machines](payment-state-machines.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md), [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
+- **References:** [State machines](payment-state-machines.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md), [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0008](../adr/0008-persistent-kafka-retry-scheduler.md)
 - **Important:** This is **documentation**, not executable SQL, application code, or a commitment to a concrete migration.
 
 ## Summary and cardinality
@@ -135,8 +135,9 @@ The **four principal tables above remain the approved core domain model**. Subse
 | --- | --- | --- |
 | `outbox_events` | **Architectural pattern accepted (ADR-0004)**; columns, constraints, and delivery mechanism not yet designed. | Persist publication intent in the **same database transaction** as accepted Payment/PaymentOperation/idempotency/audit changes, so a committed payment cannot lose its processing intent on a subsequent Kafka failure. |
 | `psp_webhook_inbox` | **Candidate for future design**; not yet approved. | Deduplicate and process PSP callbacks safely if/when the PSP webhook contract is designed. |
+| `scheduled_retries` | **Persistent scheduling responsibility accepted (ADR-0008)**; table name and PostgreSQL physical schema **not yet approved**. | Candidate to durably track consumer-retry eligibility, attempt metadata, status and deduplication; distinct from PSP financial HTTP retries and financial reconciliation. |
 
-The Outbox is **additional supporting infrastructure data**, not a fifth independent payment-domain aggregate. Its rows are different from the durable `payment_audit_events` records and can be published more than once after crashes. Exact topics, payloads, delivery strategy, retention, and implementation remain open.
+The Outbox and proposed retry schedules are **supporting infrastructure data**, not additional independent payment-domain aggregates. Outbox rows differ from durable `payment_audit_events` records and can be published more than once after crashes. The retry schedule is also not a substitute for PaymentOperation or PSP reconciliation. Exact topics, payloads, reliable dispatch strategy, retention, and implementation remain open.
 
 No SQL, runtime services, event payloads or infrastructure are created by this document.
 
