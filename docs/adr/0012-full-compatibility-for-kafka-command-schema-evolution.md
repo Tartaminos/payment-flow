@@ -103,13 +103,13 @@ The exact version naming scheme (including whether to change command type or Kaf
 - New features may need optional fields, defaults or staged migration rather than immediate contract replacement.
 - Both producer and consumer behavior must be tested; changing a version number alone is insufficient.
 - Strict reader validation must still reject data that could change financial behavior unsafely, even if unknown-field tolerance is generally enabled.
-- Some serialization formats enforce compatibility rules differently. **No assumption is made that JSON, Avro or Protobuf has already been selected.**
-- A Schema Registry or validation tooling may help enforce these rules, but has **not** been approved; neither a specific registry mode (e.g., `FULL` vs. `FULL_TRANSITIVE`) nor the exact supported-version window is locked by this ADR.
+- **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Apache Avro with Schema Registry and `FULL_TRANSITIVE`** for the Kafka command family. This does not replace the semantic and historical-recoverability requirements established in this ADR.
+- **A Schema Registry with `FULL_TRANSITIVE` was approved subsequently in [ADR-0013](0013-apache-avro-schema-registry-full-transitive.md)**. Registry checks only cover versions retained for a schema subject; safe old-message replay, migration, lifecycle and financial semantics require additional validation.
 - Any persisted older message that remains recoverable must have a valid interpretation or explicit migration path before support is dropped.
 
 ## Open decisions
 
-- Choose serialization/schema technology: **JSON Schema, Avro, or Protobuf**; registry/governance tooling, if any.
+- **Resolved by [ADR-0013](0013-apache-avro-schema-registry-full-transitive.md):** Apache Avro plus Schema Registry with `FULL_TRANSITIVE`; exact registry product, subject naming and governance implementation remain open.
 - Define the exact `schemaVersion` interpretation, version compatibility checking mechanics and supported-version lifecycle.
 - Define serialization of IDs/timestamps, unknown-field validation, and placement of metadata in Kafka headers versus body.
 - Finalize `paymentId` placement and Kafka partition key, topic and consumer group contracts.
