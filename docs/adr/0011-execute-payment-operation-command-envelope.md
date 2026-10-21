@@ -45,7 +45,6 @@ The conceptual `ExecutePaymentOperation` command carries the following attribute
 {
   "messageId": "9b8dd6c9-1044-4cc8-a2c3-ea96876423cb",
   "commandType": "ExecutePaymentOperation",
-  "schemaVersion": 1,
   "operationId": "b8d7106f-5930-4b6b-b7fb-08985070a91d",
   "correlationId": "91d0d856-3e2a-4df5-bba6-c92797d26db6",
   "occurredAt": "2026-10-21T18:00:14Z",
