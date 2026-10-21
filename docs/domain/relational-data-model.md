@@ -3,7 +3,7 @@
 - **Status:** Accepted conceptual baseline; physical schema, migrations and API contracts not implemented
 - **Date:** 2026-10-20
 - **Scope:** Credit-card payments via simulated PSP
-- **References:** [State machines](payment-state-machines.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md), [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0008](../adr/0008-persistent-kafka-retry-scheduler.md)
+- **References:** [State machines](payment-state-machines.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0003](../adr/0003-distinguish-financial-success-from-rejection.md), [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0008](../adr/0008-persistent-kafka-retry-scheduler.md), [ADR-0010](../adr/0010-generic-execute-payment-operation-command.md)
 - **Important:** This is **documentation**, not executable SQL, application code, or a commitment to a concrete migration.
 
 ## Summary and cardinality
