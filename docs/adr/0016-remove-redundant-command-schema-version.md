@@ -73,7 +73,7 @@ The `causationId` may be omitted from a **conceptual JSON depiction**, but the a
 ## Open decisions
 
 - Final Avro record name/namespace, physical `.avsc` layout and validation rules.
-- Kafka key (`paymentId` candidate), final header-versus-Avro-value layout, partitioning and consumer groups.
+- Kafka key (`paymentId` candidate), partitioning and consumer groups. **[ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md) subsequently establishes the Avro value as the authoritative command and headers as optional transport/observability metadata**; exact optional header names remain open.
 - How writer schema IDs and registry subjects are resolved and preserved in the Outbox, persistent Retry Scheduler, DLQ and controlled redrive paths.
 - Whether a future business-semantic protocol version is required; **none is currently approved**.
 - Registry implementation, operational configuration and migration/retention of historical schemas.
