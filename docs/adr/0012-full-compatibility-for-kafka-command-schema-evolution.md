@@ -29,7 +29,7 @@ Adopt **Full Compatibility** as the **default policy for compatible changes** to
 3. Do not silently change the **type, meaning or required status** of existing fields, especially `operationId`, `messageId`, `commandType`, `correlationId` and `occurredAt` as approved in ADR-0011.
 4. Do not casually remove or rename fields required by supported readers. To rename, prefer an additive migration with a transition period, while retaining the original field until supported consumers and recoverable records have safely moved.
 5. Verify compatibility in **both directions** before deployment, including representatives of messages still in persistent retry storage.
-6. The consumer's handling of `schemaVersion` must distinguish an understood **compatible extension** from a truly unsupported breaking contract. Merely incrementing a version number for an additive field must not automatically turn otherwise readable commands into poison messages.
+6. **[ADR-0016](0016-remove-redundant-command-schema-version.md) subsequently removed the redundant application-level `schemaVersion` field.** Consumers must use supported Avro writer/reader schema identity and compatibility policy, not an integer in the payload, to understand compatible extensions. A registry-version change alone must not incorrectly classify otherwise compatible commands as poison messages.
 
 ## Example: adding an optional field
 
@@ -39,7 +39,6 @@ Conceptual prior envelope (V1):
 {
   "messageId": "message-001",
   "commandType": "ExecutePaymentOperation",
-  "schemaVersion": 1,
   "operationId": "operation-123",
   "correlationId": "flow-789",
   "occurredAt": "2026-10-21T18:00:00Z"
@@ -52,7 +51,6 @@ Illustrative compatible extension (V2):
 {
   "messageId": "message-002",
   "commandType": "ExecutePaymentOperation",
-  "schemaVersion": 2,
   "operationId": "operation-123",
   "correlationId": "flow-789",
   "occurredAt": "2026-10-21T18:01:00Z",
@@ -62,7 +60,7 @@ Illustrative compatible extension (V2):
 
 The `priority` attribute is only a **teaching example**, **not** an approved addition to the PaymentFlow envelope or a decision to support multiple priorities.
 
-This extension is compatible **only if** the newer consumer supplies the same safe default for missing `priority`, older consumers can safely ignore the additional field, and old readers do not reject the newer `schemaVersion` solely by an overly strict version check. A change of the version field by itself does not guarantee compatibility.
+This extension is compatible **only if** the newer consumer safely handles absent `priority` and older consumers can read the new writer schema. Avro writer/reader resolution and the Schema Registry's `FULL_TRANSITIVE` validation govern structural evolution; no `schemaVersion` field is needed in the record. Schema compatibility is not proof of correct business semantics.
 
 ## Breaking changes
 
@@ -110,7 +108,7 @@ The exact version naming scheme (including whether to change command type or Kaf
 ## Open decisions
 
 - **Resolved by [ADR-0013](0013-apache-avro-schema-registry-full-transitive.md):** Apache Avro plus Schema Registry with `FULL_TRANSITIVE`. **[ADR-0014](0014-record-name-strategy-for-kafka-avro-subjects.md) selects `RecordNameStrategy` for value subjects.** Exact registry product, Avro names/namespaces and governance implementation remain open.
-- Define the exact `schemaVersion` interpretation, version compatibility checking mechanics and supported-version lifecycle.
+- **[ADR-0016](0016-remove-redundant-command-schema-version.md) removes `schemaVersion` from commands.** Define schema-ID resolution, version compatibility checking mechanics and supported-schema lifecycle.
 - Define serialization of IDs/timestamps, unknown-field validation, and placement of metadata in Kafka headers versus body.
 - Finalize `paymentId` placement and Kafka partition key, topic and consumer group contracts.
 - Develop a test matrix and rollout/rollback criteria for compatible additions and breaking migrations.
