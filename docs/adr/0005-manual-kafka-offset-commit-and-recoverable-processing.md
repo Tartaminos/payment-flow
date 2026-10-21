@@ -92,6 +92,6 @@ A timestamp varying per event should **not** be appended to the proposed partiti
 - Offset commit execution strategy (per record, batches, asynchronous completions), rebalance callbacks, poll loop and per-partition concurrency control.
 - Exact durable recovery mechanism for abandoned `PROCESSING` operations (lease expiry, status-check worker, scheduler, or other).
 - The trigger for `UNKNOWN` and the durable reconciliation work record/job; ability to recover after a crash even if no Kafka record is replayed.
-- Poison-message classification and durable DLQ/quarantine (versus financial reconciliation) are approved in [ADR-0006](0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md). Exact DLQ schema, offsets and redrive/monitoring/backpressure remain open.
+- Poison-message classification and durable DLQ/quarantine (versus financial reconciliation) are approved in [ADR-0006](0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md). [ADR-0007](0007-single-kafka-retry-topic-and-dlq.md) subsequently approved a **single consumer retry topic and a single DLQ**, with durable forwarding before offset acknowledgment. Exact DLQ schema, delayed retry scheduling, redrive and monitoring/backpressure remain open.
 - Concrete retry intervals between PSP requests (timeout budgets **5s/10s/20s** are already accepted).
 - No SQL, code, Kafka configuration or running services are created by this document.
