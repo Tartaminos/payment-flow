@@ -112,8 +112,8 @@ A possible dispatch strategy is to register a **new Outbox publication intent** 
 
 ## Not yet approved
 
-- **Kafka retry backoff formula and parameters**: exponential backoff and jitter were discussed, with illustrative 10-second initial delay, 5-minute cap and ±20% jitter, but these are **proposals**, not committed values.
-- Maximum attempts, age/expiry of scheduled retries, alert thresholds and what to do after sustained transient failures (do **not** equate exhaustion with permanent poison-message status).
+- **Kafka consumer retry backoff formula and parameters were subsequently accepted in [ADR-0009](0009-exponential-backoff-with-jitter-for-kafka-retries.md)**: 10-second initial delay, 2× growth, ±20% bounded jitter, hard five-minute maximum and no automatic DLQ on transient retry-count exhaustion. Scheduler precision, retry counting/deduplication and operational thresholds remain to be designed.
+- No automatic fixed retry-count limit or DLQ transition for sustained transient failures (ADR-0009); aged-retry handling, alert thresholds, escalation and operational backpressure remain to be specified.
 - Exact physical schema, deduplication keys, indexes, claiming/leases, scheduling precision, clocks/timezones, scheduler poll frequency and dispatch batch size.
 - Whether dispatch uses the existing Transactional Outbox, exact destination Kafka topic, event contract, message key, consumer groups, and delivery acknowledgement.
 - Mechanism for preserving **valid but temporarily ineligible** financial work under reordering.
