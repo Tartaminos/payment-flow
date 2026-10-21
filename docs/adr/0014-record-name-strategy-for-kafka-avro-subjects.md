@@ -82,7 +82,7 @@ The diagram shows logical relationships, not a final choice to serialize the ret
 
 - **Field representations were accepted in [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md):** UUID logical types, `timestamp-millis`, nullable `causationId` with a default of `null`, and no artificial defaults for required fields. Final namespace/record name and physical `.avsc` contract are still open.
 - Registry implementation/provider, subject naming governance across environments, authorization/credentials and registration procedures.
-- Handling of `schemaVersion` from ADR-0011 versus schema IDs/versions carried by the Avro serializer/Schema Registry.
+- **[ADR-0016](0016-remove-redundant-command-schema-version.md) removes `schemaVersion` from the command.** Exact Schema Registry schema-ID resolution and retention remain to be designed.
 - Header-versus-payload fields and exact serialization envelope, including placement (or omission) of `paymentId`.
 - Kafka topic names, key/partitioner, partition count, allowed record types per topic and consumer groups.
 - Whether the single retry topic carries the original command record, a distinct retry wrapper, or another durable recoverable representation; Scheduler ingestion and Dispatcher handoff contracts.
