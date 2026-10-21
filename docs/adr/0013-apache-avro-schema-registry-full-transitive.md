@@ -18,7 +18,7 @@ JSON Schema, Apache Avro and Protocol Buffers were compared with Java/Spring Boo
 **Use Apache Avro to serialize PaymentFlow's Kafka command payloads, governed through a Schema Registry with `FULL_TRANSITIVE` schema compatibility for the appropriate command schema subject(s).**
 
 1. **Apache Avro** is the accepted serialization/schema technology for `ExecutePaymentOperation` Kafka commands. This decision does not commit all future, unrelated message families to Avro without separate evaluation.
-2. Use a **Schema Registry** that supports Avro and the `FULL_TRANSITIVE` compatibility mode (as defined by the Confluent-compatible schema-registry model). The exact product, deployment strategy and registry subject naming conventions remain open.
+2. Use a **Schema Registry** that supports Avro and the `FULL_TRANSITIVE` compatibility mode (as defined by the Confluent-compatible schema-registry model). The exact product and deployment strategy remain open. **[ADR-0014](0014-record-name-strategy-for-kafka-avro-subjects.md) subsequently accepts `RecordNameStrategy` for Kafka Avro value subjects**; final Avro names/namespaces and environment governance remain open.
 3. **`FULL_TRANSITIVE` checks backward and forward schema compatibility against all earlier schema versions still registered under a subject**, not merely the immediate preceding version. The compatibility setting must be applied at the right subject scope and enforced for schema evolution.
 4. Keep the existing [ADR-0011](0011-execute-payment-operation-command-envelope.md) conceptual envelope: `messageId`, `commandType`, `schemaVersion`, `operationId`, `correlationId`, `occurredAt` required; `causationId` optional. Whether to include `paymentId`, how to encode UUID/timestamps, and whether individual fields are in Kafka headers vs. the Avro payload remain open.
 5. The message's business `schemaVersion` field (if retained in its exact present form) and **Schema Registry schema IDs/versions** are distinct concepts. Their concrete relationship, and how producers select/read schema identities on the wire, require a separate contract design decision.
@@ -90,7 +90,7 @@ The paths and responsibilities remain those accepted in ADRs 0004–0011. This d
 
 - Actual Avro schema definition and field types: UUID/string or logical conventions, timestamps, optional fields, namespace/record names, defaults and validation.
 - Kafka payload versus headers layout; handling and possible redundancy of `schemaVersion` alongside registry-assigned identifiers.
-- Schema subject-naming strategy, registry vendor/hosting/security/configuration, and how producers/consumers resolve schemas.
+- **Subject naming was settled in [ADR-0014](0014-record-name-strategy-for-kafka-avro-subjects.md): `RecordNameStrategy` for Avro Kafka values**, with `FULL_TRANSITIVE` per fully qualified record name. Final record names/namespaces, registry vendor/hosting/security/configuration and producer/consumer schema resolution are still open.
 - Topic names and boundaries, partition key (`paymentId` remains only a candidate), partition count and consumer groups.
 - Retry Scheduler storage representation (serialized original bytes vs. reconstructed references), safe replay and schema retention/migration.
 - Exact DLQ wire format and how original payload/schema identity is retained for diagnostics and later redrive.
