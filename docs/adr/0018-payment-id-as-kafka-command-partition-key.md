@@ -21,14 +21,14 @@ The open choice was to key the command by the **operation** or its parent **paym
 2. The key is derived from the **authoritative persisted relation** `PaymentOperation.paymentId`. It must remain the same across command redelivery, technical retry, and republication of the same logical operation. For *different* `PaymentOperation` records belonging to one `Payment`, the key is still the **same** `paymentId`.
 3. The producer/dispatch flow must retain or safely resolve the key when constructing its durable publication intent. If the key cannot safely be obtained, it must **not** substitute `operationId`, generate a new key, or publish an unkeyed financial command. Recover the publication according to the agreed Outbox/scheduler failure policy. The exact method of carrying the key in durable Outbox/Retry Scheduler records is a later design choice.
 4. The Avro **value** still carries the accepted fields: `messageId`, `commandType`, `operationId`, `correlationId`, `occurredAt`, and optional `causationId`. **This ADR does not add `paymentId` to the Avro value**. Its presence there remains a separate, unresolved decision. Kafka key identity and business command identity have different responsibilities.
-5. Keep the key's serialization **deterministic and consistent between all producers** of the same topic: using the same logical `paymentId` must yield the same serialized key bytes for a fixed partitioner/partition-count configuration. Exact UUID key encoding (`String`, 16-byte form, etc.), key serializer, partitioner and partition count remain **open**.
+5. Keep the key's serialization **deterministic and consistent between all producers** of the same topic: using the same logical `paymentId` must yield the same serialized key bytes for a fixed partitioner/partition-count configuration. **[ADR-0019](0019-canonical-utf8-uuid-kafka-command-key.md) subsequently approves a lowercase, hyphenated, canonical UUID string encoded as UTF-8** for the Kafka key. The exact serializer implementation/configuration, partitioner and partition count remain **open**.
 6. This key choice targets **partition affinity within each topic** for commands belonging to the same payment. It is **not** a guarantee of global financial/business-operation ordering.
 
 ### Conceptual Kafka record
 
 ```text
 Kafka record
-├── key:      paymentId (stable ID of the parent Payment)
+├── key:      paymentId (canonical UUID text, UTF-8; ADR-0019)
 ├── headers:  optional transport/observability context (ADR-0017)
 └── value:    Avro ExecutePaymentOperation
              ├── messageId       : UUID
@@ -63,7 +63,7 @@ The key `paymentId` answers **which payment should share Kafka partition affinit
 ## Not yet approved
 
 - Exact Kafka topic names/counts, consumer-group topology, number of partitions, producer/consumer concurrency and partition expansion/operational procedures.
-- Concrete key UUID serialization, topic partitioner, key schema/registry governance **if the key is Avro-encoded**. The already approved `RecordNameStrategy` governs **Avro value** subjects, not automatically key schemas.
+- **[ADR-0019](0019-canonical-utf8-uuid-kafka-command-key.md) approves canonical lowercase UUID text encoded with UTF-8** for the key, not Avro. Exact serializer/configuration, topic partitioner and partition count remain open. `RecordNameStrategy` continues to govern **Avro value** subjects.
 - Whether `paymentId` also appears in the Avro value. `operationId` remains the required authoritative operation lookup field.
 - The single retry topic's technical record shape and whether that distinct wrapper also carries `paymentId` as its Kafka key; it must still preserve source references and remain safely recoverable. If it republishes the approved `ExecutePaymentOperation` record, this ADR's key applies.
 - Durable Outbox and Retry Scheduler storage/dispatch mechanics for preserving `paymentId`, source schema identity, retry deduplication and attempts.
