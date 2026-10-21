@@ -104,7 +104,7 @@ The sequence illustrates responsibilities, **not** guaranteed message ordering o
 
 - Final acceptance HTTP response semantics (`202` vs. `201`), response body, status endpoint payload and error contracts.
 - Exact `outbox_events` schema, publisher technique (polling vs. CDC), dispatch scheduling and failure/retry policies.
-- Kafka topics, message envelopes, partition keys, ordering, consumer groups, and dead-letter strategy. **Offset commit semantics were subsequently accepted in [ADR-0005](0005-manual-kafka-offset-commit-and-recoverable-processing.md): manual acknowledgment only after a durable result or independently recoverable handoff.**
+- Kafka topics, message envelopes, partition keys, ordering and consumer groups. **Offset commit semantics were subsequently accepted in [ADR-0005](0005-manual-kafka-offset-commit-and-recoverable-processing.md); [ADR-0006](0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md) establishes controlled consumer retries, durable DLQ/quarantine for definitively unprocessable messages, and independent PSP reconciliation.** Concrete retry topology, DLQ contracts and redrive remain open.
 - Worker reservation/lease design after process crashes, and the precise boundary between in-progress and unknown PSP outcomes.
 - PSP callback/webhook inbox design, outbox publication of subsequent state changes, client notification webhooks.
 - Queue/backpressure behavior when Kafka or the PSP is unavailable for extended periods.
