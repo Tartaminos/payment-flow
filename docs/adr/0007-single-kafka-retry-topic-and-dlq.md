@@ -35,7 +35,7 @@ For the initial Kafka consumer failure-handling architecture, adopt **one dedica
 | Single Kafka consumer retry destination | `payment.operations.retry.v1` | **One dedicated retry topic approved**; name is proposed |
 | Single DLQ/quarantine destination | `payment.operations.dlq.v1` | **One dedicated DLQ approved**; name is proposed |
 
-These names are illustrative. The decision does not approve an exact count of partitions, a consumer group identity, a partition key, or message payload formats.
+These names are illustrative. Partition count, consumer group identity and exact message formats remain open. **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) subsequently selects `paymentId` as the Kafka key for financial `ExecutePaymentOperation` command publications**, without finalizing the retry wrapper format or any DLQ key.
 
 ## Conceptual routing
 
@@ -113,7 +113,7 @@ The database/domain model, not cross-topic Kafka ordering, enforces authorizatio
 
 - The Kafka consumer **backoff schedule** (10-second initial delay, 2× growth, ±20% jitter and hard five-minute cap) and **absence of automatic DLQ on fixed transient retry count** were accepted in [ADR-0009](0009-exponential-backoff-with-jitter-for-kafka-retries.md). Operational thresholds, pressure limits and incident escalation remain open, separately from PSP request timeouts.
 - A **persistent scheduler and due-work dispatcher** were approved in [ADR-0008](0008-persistent-kafka-retry-scheduler.md) for delayed retries without keeping consumer partitions paused. Exact persistence schema, selection/leases, dispatcher reliability and timed eligibility remain open.
-- Final topic names, partition key, number of partitions, consumer groups and Kafka event envelope/versioning.
+- **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) chooses `paymentId` for financial command publications**. Final topic names, key encoding, partition counts, consumer groups and the retry-specific envelope/key remain to be designed.
 - Reliable publishing/acknowledgment strategy and any transactional/Outbox-like handoff for **consumer-produced retry messages**.
 - Dead-letter retention, permission model, diagnostics, alerting, operator runbook and safe redrive mechanism.
 - Durable workflow for valid-but-not-yet-eligible operations under possible cross-topic reordering.
