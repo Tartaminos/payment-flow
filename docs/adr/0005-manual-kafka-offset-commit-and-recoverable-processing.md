@@ -44,7 +44,7 @@ We must prevent two opposite problems:
 | Worker crashes or loses its partition lease while operation is `PROCESSING` | Another worker must not assume the financial operation was never sent; confirm original identity/status or safely transfer to durable recovery | **Not yet**, unless a separate durable recovery process already owns it |
 | Consumer receives a duplicate for a definitively handled operation | Verify identity and previous durable result; skip any new PSP financial effect | **Yes**, once the duplicate is safely recognized |
 | Kafka offset commit fails **after** a successful DB transaction | Message may be delivered again and must be idempotently recognized | Replay is safe; try to commit again |
-| A record is malformed or persistently unprocessable | Do not silently skip or claim success; record must reach an explicitly defined durable handling path | **Not until** such a policy and handoff exist |
+| A record is definitively malformed or unprocessable | Transfer to durable DLQ/quarantine under [ADR-0006](0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md); preserve identity and evidence without inventing a financial outcome | **Only after** quarantine is durably confirmed and safely recoverable |
 
 ### Example: timeout on an in-flight capture
 
@@ -92,6 +92,6 @@ A timestamp varying per event should **not** be appended to the proposed partiti
 - Offset commit execution strategy (per record, batches, asynchronous completions), rebalance callbacks, poll loop and per-partition concurrency control.
 - Exact durable recovery mechanism for abandoned `PROCESSING` operations (lease expiry, status-check worker, scheduler, or other).
 - The trigger for `UNKNOWN` and the durable reconciliation work record/job; ability to recover after a crash even if no Kafka record is replayed.
-- Poison-message handling, dead-letter/quarantine policy, monitoring and backpressure.
+- Poison-message classification and durable DLQ/quarantine (versus financial reconciliation) are approved in [ADR-0006](0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md). Exact DLQ schema, offsets and redrive/monitoring/backpressure remain open.
 - Concrete retry intervals between PSP requests (timeout budgets **5s/10s/20s** are already accepted).
 - No SQL, code, Kafka configuration or running services are created by this document.
