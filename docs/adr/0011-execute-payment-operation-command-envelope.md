@@ -19,7 +19,7 @@ The conceptual `ExecutePaymentOperation` command carries the following attribute
 | --- | --- | --- |
 | `messageId` | Required | Stable identity of **one logical message publication**. Remains the same when that same Kafka record is delivered again. A **new** republished command (e.g., via the Retry Dispatcher) may have a **new** `messageId`. |
 | `commandType` | Required | Command discriminator; currently literal `ExecutePaymentOperation`. |
-| `schemaVersion` | Required | Version identifier used to interpret the command contract. The illustrative initial value is `1`; precise compatibility/evolution rules are still deferred. |
+| `schemaVersion` | Required | Version identifier used to interpret the command contract. The illustrative initial value is `1`; subsequent [ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) establishes Full Compatibility as the default policy, while concrete interpretation and encoding are still to be defined. |
 | `operationId` | Required | Stable identity of the **existing durable PaymentOperation**; unchanged across Kafka redelivery, retries and new command publications. |
 | `correlationId` | Required | Identifier connecting the original request and downstream workflow, including retries and diagnostics. Normally preserved through this processing chain. |
 | `occurredAt` | Required | Time at which **this command publication was created**, **not** when the PSP executed/authorized/captured the payment. |
@@ -91,7 +91,7 @@ These examples illustrate agreed field roles. The exact wire schema/serializatio
 
 ## Not decided here
 
-- Precise schema-evolution rules (forward/backward compatibility, additive versus breaking changes, supported schema versions, unknown fields and schema registry approach).
+- **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) subsequently accepted Full Compatibility as the default**: compatible additive changes in both directions, with explicit migration for breaking changes and ongoing support for recoverable older records. Specific `schemaVersion` interpretation, supported-version retirement rules, on-wire unknown-field behavior and schema-registry approach remain open.
 - Whether this JSON example becomes the final on-wire encoding; field-format specifications, payload/headers placement, schema governance and validation errors.
 - Whether `paymentId` appears in payload or only in the **future** Kafka record key; exact partition key/partitioner/consumer-group/topic names and counts.
 - Outbox publisher's practical identity-generation/lifecycle, Retry Scheduler deduplication key, dispatcher publication identity and concurrency.
