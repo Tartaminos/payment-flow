@@ -95,7 +95,7 @@ The actual Kafka wire representation is **binary Avro**, not this JSON declarati
 ## Explicitly open
 
 1. **Resolved by [ADR-0016](0016-remove-redundant-command-schema-version.md):** remove the redundant `schemaVersion` from the Avro command payload; use Schema Registry identity for structural versions. A distinct business-semantic version remains unapproved.
-2. Placement of metadata in Kafka **headers vs. Avro value**, including whether all listed fields stay in the value.
+2. **Resolved by [ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md):** essential command fields stay in the Avro value; Kafka headers are reserved for optional transport/observability metadata. Exact header names remain open.
 3. Final Avro namespace and record name, UUID lexical validation and Java binding configuration.
 4. `paymentId` as payload attribute and/or Kafka record **partition key**, key serialization and partition count.
 5. Physical `.avsc` artifact, registration/compatibility tests, exact publication wire envelope and registry implementation.
