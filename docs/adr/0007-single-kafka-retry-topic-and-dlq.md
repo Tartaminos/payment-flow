@@ -24,7 +24,7 @@ For the initial Kafka consumer failure-handling architecture, adopt **one dedica
 - **One retry topic:** transiently unprocessable consumer records can be transferred durably so the original partition is not held indefinitely by one failing message.
 - **One DLQ:** definitively unprocessable records are transferred to durable quarantine for inspection, correction and controlled replay.
 - **No multiple retry topics per delay tier in the MVP.** This may be revisited if real performance or scheduling requirements justify it.
-- Backoff duration, eligibility timestamps, retry count limits, retry dispatcher/scheduler implementation and exact failure classifications remain **undecided**. A Kafka topic by itself does **not** schedule delayed delivery.
+- The **persistent scheduler and logical dispatcher** were subsequently selected in [ADR-0008](0008-persistent-kafka-retry-scheduler.md). Backoff duration, retry count limits, physical scheduler implementation and exact failure classifications remain **undecided**. A Kafka topic by itself does **not** schedule delayed delivery.
 - This decision concerns **Kafka message-processing retries only**. The independent PSP HTTP retry limit (three total attempts with request timeouts **5s, 10s, 20s**, only when provider-safe) remains unchanged.
 
 ### Proposed topic names — not yet finalized contracts
@@ -95,7 +95,7 @@ The database/domain model, not cross-topic Kafka ordering, enforces authorizatio
 
 ### B. Multiple Kafka retry topics grouped by delay duration
 
-**Deferred for later evaluation.** May simplify some operational timing policies, but multiplies topics, routing and consumer orchestration before throughput/backoff requirements are defined.
+**Deferred for later evaluation.** May simplify some operational timing policies, but multiplies topics, routing and consumer orchestration before throughput/backoff requirements are defined. ADR-0008 subsequently selects durable scheduling behind a single retry topic.
 
 ### C. Single Kafka retry topic plus single DLQ
 
@@ -112,7 +112,7 @@ The database/domain model, not cross-topic Kafka ordering, enforces authorizatio
 ## Explicitly open for future design
 
 - Backoff schedule and retry budget for Kafka consumer messages, distinct from the already approved PSP request timeouts.
-- How to implement a **single-topic delayed retry without hot-loop consumption**, including a scheduler/dispatcher or equivalent durable eligibility handling; no scheduling mechanism is implicitly approved.
+- A **persistent scheduler and due-work dispatcher** were approved in [ADR-0008](0008-persistent-kafka-retry-scheduler.md) for delayed retries without keeping consumer partitions paused. Exact persistence schema, selection/leases, dispatcher reliability and timed eligibility remain open.
 - Final topic names, partition key, number of partitions, consumer groups and Kafka event envelope/versioning.
 - Reliable publishing/acknowledgment strategy and any transactional/Outbox-like handoff for **consumer-produced retry messages**.
 - Dead-letter retention, permission model, diagnostics, alerting, operator runbook and safe redrive mechanism.
