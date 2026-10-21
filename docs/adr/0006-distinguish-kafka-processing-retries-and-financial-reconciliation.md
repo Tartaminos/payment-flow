@@ -72,7 +72,7 @@ Adopt three separate handling paths:
 
 ## Explicitly deferred decisions
 
-- A **single dedicated retry topic plus a single DLQ** was subsequently accepted in [ADR-0007](0007-single-kafka-retry-topic-and-dlq.md), instead of using local retries as the primary sustained-transient-failure strategy. Exact Kafka retry backoff, budgets, timing and delayed-eligibility scheduler remain to be defined.
+- A **single dedicated retry topic plus a single DLQ** was subsequently accepted in [ADR-0007](0007-single-kafka-retry-topic-and-dlq.md), instead of using local retries as the primary sustained-transient-failure strategy. The persistent Scheduler is selected in [ADR-0008](0008-persistent-kafka-retry-scheduler.md), and the consumer backoff policy is accepted in [ADR-0009](0009-exponential-backoff-with-jitter-for-kafka-retries.md). Detailed scheduling implementation, retry identity and operational alert thresholds remain open.
 - DLQ/quarantine topic name, payload envelope, required redaction, retention, access controls, alerting/ownership and redrive process.
 - Whether a PostgreSQL quarantine/inbox record is needed in addition to, or instead of, Kafka DLQ for durable acknowledgment.
 - Concrete offset/acknowledgment coordination with DLQ publication and consumer-group rebalances.
