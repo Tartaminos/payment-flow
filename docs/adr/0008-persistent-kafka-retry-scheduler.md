@@ -117,7 +117,7 @@ A possible dispatch strategy is to register a **new Outbox publication intent** 
 - Exact physical schema, deduplication keys, indexes, claiming/leases, scheduling precision, clocks/timezones, scheduler poll frequency and dispatch batch size.
 - Whether dispatch uses the existing Transactional Outbox, exact destination Kafka topic, event contract, message key, consumer groups, and delivery acknowledgement.
 - Mechanism for preserving **valid but temporarily ineligible** financial work under reordering.
-- Monitoring, operational replay and long-outage handling under Kafka's seven-day initial retention policy.
+- Monitoring, operational replay and long-outage handling under Kafka's seven-day initial retention policy. The **Full Compatibility** policy in [ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) also requires maintaining decoders or migration paths for older commands retained durably beyond Kafka retention.
 - Whether PSP reconciliation needs a distinct scheduler; this ADR **does not** equate financial reconciliation with Kafka consumer retries.
 
 ## Documentation-only boundary
