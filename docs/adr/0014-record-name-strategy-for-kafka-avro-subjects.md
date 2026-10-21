@@ -62,7 +62,7 @@ The diagram shows logical relationships, not a final choice to serialize the ret
 5. **Schema compatibility is structural, not financial.** The Payment Processor still validates the authoritative PostgreSQL PaymentOperation/Payment before any PSP call. No duplicate financial effect is permitted merely because two records have different message IDs or schema versions.
 6. **Persistent retry recovery:** older records kept by the Retry Scheduler must remain decodable even after the source Kafka records expire. Registered schema history, available reader schemas, correct original schema identification and operational migration paths remain critical; `FULL_TRANSITIVE` is insufficient if needed schemas are deleted or their semantic meaning changed.
 7. **Malformed or unrecognized messages:** an undecodable record follows the established durable DLQ/quarantine procedure; it is not proof that a payment was rejected or failed.
-8. **Keys are separate:** value subject naming is independent of the Kafka partition key, which remains to be chosen (with `paymentId` previously discussed as a candidate). A future Avro-encoded message key, if any, requires its own schema and subject decision.
+8. **Keys are separate:** value subject naming is independent of the Kafka partition key, which remains to be chosen (with `paymentId` previously discussed as a candidate). **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) subsequently chooses `paymentId` as the record key for financial commands**; its encoding and any Avro key schema/subject decision remain separate.
 
 ## Alternatives considered
 
@@ -84,7 +84,7 @@ The diagram shows logical relationships, not a final choice to serialize the ret
 - Registry implementation/provider, subject naming governance across environments, authorization/credentials and registration procedures.
 - **[ADR-0016](0016-remove-redundant-command-schema-version.md) removes `schemaVersion` from the command.** Exact Schema Registry schema-ID resolution and retention remain to be designed.
 - Header-versus-payload fields and exact serialization envelope, including placement (or omission) of `paymentId`.
-- Kafka topic names, key/partitioner, partition count, allowed record types per topic and consumer groups.
+- **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) chooses `paymentId` for the financial command key.** Exact key serialization, Kafka topic names, partitioner/count, allowed record types per topic and consumer groups remain undecided.
 - Whether the single retry topic carries the original command record, a distinct retry wrapper, or another durable recoverable representation; Scheduler ingestion and Dispatcher handoff contracts.
 - DLQ format, schema identity preservation and controlled replay; safe removal/archival of historical subjects and schemas.
 
