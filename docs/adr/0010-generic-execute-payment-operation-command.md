@@ -26,13 +26,12 @@ Two command shapes were considered: separate `AuthorizePayment`, `CapturePayment
 
 ### Illustrative command envelope — initial proposal, subsequently refined
 
-The following example captured the initial discussion; **[ADR-0011](0011-execute-payment-operation-command-envelope.md) subsequently approved the conceptual field responsibilities and current envelope**. This older example is **not** the finalized on-wire format:
+The following example captured the initial discussion; **[ADR-0011](0011-execute-payment-operation-command-envelope.md) subsequently approved the conceptual field responsibilities and current envelope**. This older example predates later envelope refinements and is **not** the finalized on-wire format. In particular, [ADR-0016](0016-remove-redundant-command-schema-version.md) removes `schemaVersion` from the command:
 
 ```json
 {
   "eventId": "uuid-message-001",
   "commandType": "ExecutePaymentOperation",
-  "schemaVersion": 1,
   "paymentId": "uuid-payment-123",
   "operationId": "uuid-operation-456",
   "operationType": "AUTHORIZE",
@@ -41,7 +40,7 @@ The following example captured the initial discussion; **[ADR-0011](0011-execute
 }
 ```
 
-This ADR establishes the **generic command type**, not its transport schema. The **separate [ADR-0011](0011-execute-payment-operation-command-envelope.md)** approves required conceptual fields (`messageId`, `commandType`, `schemaVersion`, `operationId`, `correlationId`, `occurredAt`) and optional `causationId`; `paymentId` in the message body remains undecided and `operationType` is not required. **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Apache Avro plus a Schema Registry with `FULL_TRANSITIVE`**. Exact Avro schema, Kafka headers and field-format validation are still open; **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md)** defines the broader compatibility and old-record recoverability policy.
+This ADR establishes the **generic command type**, not its transport schema. The **separate [ADR-0011](0011-execute-payment-operation-command-envelope.md)** approves required conceptual fields (`messageId`, `commandType`, `operationId`, `correlationId`, `occurredAt`) and optional `causationId`; [ADR-0016](0016-remove-redundant-command-schema-version.md) subsequently removes the redundant `schemaVersion` field; `paymentId` in the message body remains undecided and `operationType` is not required. **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Apache Avro plus a Schema Registry with `FULL_TRANSITIVE`**. Exact Avro schema, Kafka headers and field-format validation are still open; **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md)** defines the broader compatibility and old-record recoverability policy.
 
 Keep the command minimal and free from sensitive cardholder data. The PostgreSQL Payment/PaymentOperation records are the authoritative sources for monetary amount, current status, operation type, stable PSP identity, and PSP HTTP attempt count.
 
