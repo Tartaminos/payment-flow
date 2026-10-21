@@ -13,13 +13,12 @@ Kafka **redelivery** of a retained record and **republication** of a new retry c
 
 ## Accepted envelope
 
-The conceptual `ExecutePaymentOperation` command carries the following attributes:
+The conceptual `ExecutePaymentOperation` command carries the following attributes. **[ADR-0016](0016-remove-redundant-command-schema-version.md) amends this ADR to omit the formerly required `schemaVersion`: structural versions are determined by Schema Registry.**
 
 | Field | Presence | Agreed meaning |
 | --- | --- | --- |
 | `messageId` | Required | Stable identity of **one logical message publication**. Remains the same when that same Kafka record is delivered again. A **new** republished command (e.g., via the Retry Dispatcher) may have a **new** `messageId`. |
 | `commandType` | Required | Command discriminator; currently literal `ExecutePaymentOperation`. |
-| `schemaVersion` | Required | Version identifier used to interpret the command contract. The illustrative initial value is `1`; subsequent [ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) establishes Full Compatibility as the default policy, while concrete interpretation and encoding are still to be defined. |
 | `operationId` | Required | Stable identity of the **existing durable PaymentOperation**; unchanged across Kafka redelivery, retries and new command publications. |
 | `correlationId` | Required | Identifier connecting the original request and downstream workflow, including retries and diagnostics. Normally preserved through this processing chain. |
 | `occurredAt` | Required | Time at which **this command publication was created**, **not** when the PSP executed/authorized/captured the payment. |
@@ -34,7 +33,6 @@ The conceptual `ExecutePaymentOperation` command carries the following attribute
 {
   "messageId": "c13a7544-1f79-45f4-9312-8993319e7a1d",
   "commandType": "ExecutePaymentOperation",
-  "schemaVersion": 1,
   "operationId": "b8d7106f-5930-4b6b-b7fb-08985070a91d",
   "correlationId": "91d0d856-3e2a-4df5-bba6-c92797d26db6",
   "occurredAt": "2026-10-21T18:00:00Z"
@@ -91,8 +89,8 @@ These examples illustrate agreed field roles. **[ADR-0013](0013-apache-avro-sche
 
 ## Not decided here
 
-- **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) subsequently accepted Full Compatibility as the default**: compatible additive changes in both directions, with explicit migration for breaking changes and ongoing support for recoverable older records. Specific `schemaVersion` interpretation, supported-version retirement rules, on-wire unknown-field behavior and schema-registry approach remain open.
-- **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) selects Avro with Schema Registry / `FULL_TRANSITIVE`; [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md) subsequently approves the field representations**, including UUID logical types, `timestamp-millis`, and nullable `causationId`. The JSON examples above remain conceptual representations, **not** the Kafka wire format. Exact header/value placement, registry schema-ID versus `schemaVersion` semantics, final subject name and validation errors remain open.
+- **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) subsequently accepted Full Compatibility as the default**: compatible additive changes in both directions, with explicit migration for breaking changes and ongoing support for recoverable older records. Structural version identification is delegated to Schema Registry by [ADR-0016](0016-remove-redundant-command-schema-version.md); supported-version retirement rules and on-wire unknown-field behavior remain open.
+- **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) selects Avro with Schema Registry / `FULL_TRANSITIVE`; [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md) subsequently approves the field representations**, including UUID logical types, `timestamp-millis`, and nullable `causationId`. The JSON examples above remain conceptual representations, **not** the Kafka wire format. Exact header/value placement, final subject name, Schema Registry wire-identity handling and validation errors remain open; [ADR-0016](0016-remove-redundant-command-schema-version.md) eliminates the application-level `schemaVersion` field.
 - Whether `paymentId` appears in payload or only in the **future** Kafka record key; exact partition key/partitioner/consumer-group/topic names and counts.
 - Outbox publisher's practical identity-generation/lifecycle, Retry Scheduler deduplication key, dispatcher publication identity and concurrency.
 - Domain event publication (`PaymentAuthorized`/`PaymentCaptured`), PSP webhooks or future notification contracts.
