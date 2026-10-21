@@ -72,12 +72,12 @@ Adopt three separate handling paths:
 
 ## Explicitly deferred decisions
 
-- Exact Kafka retry backoff, retry budget, timing, and strategy: **local delayed retries versus dedicated retry topics**.
+- A **single dedicated retry topic plus a single DLQ** was subsequently accepted in [ADR-0007](0007-single-kafka-retry-topic-and-dlq.md), instead of using local retries as the primary sustained-transient-failure strategy. Exact Kafka retry backoff, budgets, timing and delayed-eligibility scheduler remain to be defined.
 - DLQ/quarantine topic name, payload envelope, required redaction, retention, access controls, alerting/ownership and redrive process.
 - Whether a PostgreSQL quarantine/inbox record is needed in addition to, or instead of, Kafka DLQ for durable acknowledgment.
 - Concrete offset/acknowledgment coordination with DLQ publication and consumer-group rebalances.
 - Head-of-line blocking mitigation and per-payment ordering guarantees under retry topics, delayed processing or out-of-order completion.
-- Topology decisions (topic count, stable partition key, group, partition count) remain **unapproved proposals** as of this ADR.
+- Beyond the **one retry topic and one DLQ** accepted by [ADR-0007](0007-single-kafka-retry-topic-and-dlq.md), the main-topic contract, partition key, consumer group, partition count and other topology details remain unapproved.
 - PSP status-query and reconciliation scheduling mechanism; worker recovery/lease semantics and the exact point of `UNKNOWN` transition.
 
 ## Documentation-only boundary
