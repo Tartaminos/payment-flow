@@ -88,7 +88,7 @@ The paths and responsibilities remain those accepted in ADRs 0004–0011. This d
 
 ## Open decisions — not silently approved
 
-- Actual Avro schema definition and field types: UUID/string or logical conventions, timestamps, optional fields, namespace/record names, defaults and validation.
+- **Field types/defaults were decided in [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md):** UUID logical types, `timestamp-millis`, and optional `causationId` via nullable union with `default: null`. Final Avro namespace/name, validation and physical schema remain open.
 - Kafka payload versus headers layout; handling and possible redundancy of `schemaVersion` alongside registry-assigned identifiers.
 - **Subject naming was settled in [ADR-0014](0014-record-name-strategy-for-kafka-avro-subjects.md): `RecordNameStrategy` for Avro Kafka values**, with `FULL_TRANSITIVE` per fully qualified record name. Final record names/namespaces, registry vendor/hosting/security/configuration and producer/consumer schema resolution are still open.
 - Topic names and boundaries, partition key (`paymentId` remains only a candidate), partition count and consumer groups.
