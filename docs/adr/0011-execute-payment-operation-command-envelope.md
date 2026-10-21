@@ -23,7 +23,7 @@ The conceptual `ExecutePaymentOperation` command carries the following attribute
 | `correlationId` | Required | Identifier connecting the original request and downstream workflow, including retries and diagnostics. Normally preserved through this processing chain. |
 | `occurredAt` | Required | Time at which **this command publication was created**, **not** when the PSP executed/authorized/captured the payment. |
 | `causationId` | Optional | Prior message/causal trigger that led to this publication; useful, for example, for relating a newly dispatched retry to a previous message. Exact causation graph semantics remain open. |
-| `paymentId` | **Undecided** | May be included in the body, but not required by this ADR: `operationId` already identifies a PaymentOperation and its Payment in the database. Also a candidate for a future Kafka partition key. |
+| `paymentId` | **Undecided in Avro value** | May be included in the value, but is not required by this ADR: `operationId` already identifies a PaymentOperation and its Payment in the database. **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) subsequently selects `paymentId` as the Kafka record key for financial command publications.** |
 
 `operationType` is **not required** in the command envelope; the authoritative `PaymentOperation.type` (`AUTHORIZE`, `CAPTURE`, `VOID`) is looked up from the database, per ADR-0010. No PSP credential, cardholder detail, sensitive provider payload, financial amount, or authoritative business state should be inferred from the message.
 
@@ -52,7 +52,7 @@ The conceptual `ExecutePaymentOperation` command carries the following attribute
 }
 ```
 
-These examples illustrate agreed field roles. **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Avro with a Schema Registry and `FULL_TRANSITIVE`**, so the JSON shown here is illustrative, not the on-wire format. The precise Avro schema/validation grammar, uniqueness constraints and whether `paymentId` will appear in the payload remain open. **[ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md) subsequently places all essential command fields in the Avro value, reserving headers for optional transport/observability context.** No topic names or partition keys are finalized here.
+These examples illustrate agreed field roles. **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Avro with a Schema Registry and `FULL_TRANSITIVE`**, so the JSON shown here is illustrative, not the on-wire format. The precise Avro schema/validation grammar, uniqueness constraints and whether `paymentId` will appear in the payload remain open. **[ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md) subsequently places all essential command fields in the Avro value, reserving headers for optional transport/observability context.** No topic names are finalized here. **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) subsequently selects `paymentId` as the Kafka command key**, while key encoding and partition topology remain open.
 
 ## Identity semantics and replay
 
@@ -90,7 +90,7 @@ These examples illustrate agreed field roles. **[ADR-0013](0013-apache-avro-sche
 
 - **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) subsequently accepted Full Compatibility as the default**: compatible additive changes in both directions, with explicit migration for breaking changes and ongoing support for recoverable older records. Structural version identification is delegated to Schema Registry by [ADR-0016](0016-remove-redundant-command-schema-version.md); supported-version retirement rules and on-wire unknown-field behavior remain open.
 - **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) selects Avro with Schema Registry / `FULL_TRANSITIVE`; [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md) subsequently approves the field representations**, including UUID logical types, `timestamp-millis`, and nullable `causationId`. The JSON examples above remain conceptual representations, **not** the Kafka wire format. The header/value responsibility boundary is accepted by [ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md); exact optional header names, final subject name, Schema Registry wire-identity handling and validation errors remain open. [ADR-0016](0016-remove-redundant-command-schema-version.md) eliminates the application-level `schemaVersion` field.
-- Whether `paymentId` appears in payload or only in the **future** Kafka record key; exact partition key/partitioner/consumer-group/topic names and counts.
+- **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) chooses `paymentId` as the Kafka command key.** Whether it also appears in the Avro value and the exact serializer, partitioner/partition count, group and topic names remain open.
 - Outbox publisher's practical identity-generation/lifecycle, Retry Scheduler deduplication key, dispatcher publication identity and concurrency.
 - Domain event publication (`PaymentAuthorized`/`PaymentCaptured`), PSP webhooks or future notification contracts.
 
