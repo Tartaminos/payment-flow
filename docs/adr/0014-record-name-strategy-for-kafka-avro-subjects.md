@@ -80,7 +80,7 @@ The diagram shows logical relationships, not a final choice to serialize the ret
 
 ## Explicitly open
 
-- Final Avro record namespace/name, field types (UUIDs/timestamps), defaults, optional fields and concrete schema.
+- **Field representations were accepted in [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md):** UUID logical types, `timestamp-millis`, nullable `causationId` with a default of `null`, and no artificial defaults for required fields. Final namespace/record name and physical `.avsc` contract are still open.
 - Registry implementation/provider, subject naming governance across environments, authorization/credentials and registration procedures.
 - Handling of `schemaVersion` from ADR-0011 versus schema IDs/versions carried by the Avro serializer/Schema Registry.
 - Header-versus-payload fields and exact serialization envelope, including placement (or omission) of `paymentId`.
