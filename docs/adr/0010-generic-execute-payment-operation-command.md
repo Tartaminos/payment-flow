@@ -41,7 +41,7 @@ The following example captured the initial discussion; **[ADR-0011](0011-execute
 }
 ```
 
-This ADR establishes the **generic command type**, not its transport schema. The **separate [ADR-0011](0011-execute-payment-operation-command-envelope.md)** approves required conceptual fields (`messageId`, `commandType`, `schemaVersion`, `operationId`, `correlationId`, `occurredAt`) and optional `causationId`; `paymentId` in the message body remains undecided and `operationType` is not required. On-wire encoding, Kafka headers, field-format validation and schema evolution are still open.
+This ADR establishes the **generic command type**, not its transport schema. The **separate [ADR-0011](0011-execute-payment-operation-command-envelope.md)** approves required conceptual fields (`messageId`, `commandType`, `schemaVersion`, `operationId`, `correlationId`, `occurredAt`) and optional `causationId`; `paymentId` in the message body remains undecided and `operationType` is not required. On-wire encoding, Kafka headers and field-format validation are still open; **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md)** subsequently approved Full Compatibility as the schema-evolution policy.
 
 Keep the command minimal and free from sensitive cardholder data. The PostgreSQL Payment/PaymentOperation records are the authoritative sources for monetary amount, current status, operation type, stable PSP identity, and PSP HTTP attempt count.
 
@@ -79,7 +79,7 @@ The architecture already records append-only financial/audit facts in PostgreSQL
 - Consumers need a single coherent dispatch boundary while retaining **explicit type-specific checks** for authorization, capture and void.
 - The command payload can remain compact because financial operation state is already durable in PostgreSQL. This deliberately creates a database read dependency in the processor (consistent with the approved architecture).
 - A generic command requires clear validation of unsupported `PaymentOperation.type` values and safe quarantine of malformed/incompatible messages.
-- **Accepted subsequently:** the conceptual command envelope, message identities and optional causation were approved in [ADR-0011](0011-execute-payment-operation-command-envelope.md). **Next decision:** serialization and schema evolution/compatibility policy.
+- **Accepted subsequently:** the conceptual command envelope, message identities and optional causation were approved in [ADR-0011](0011-execute-payment-operation-command-envelope.md). **Accepted subsequently:** Full Compatibility for schema evolution in [ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md). **Next decision:** serialization technology and contract validation/governance.
 - **Other deferred decisions:** finalized topic name, partition key, consumer groups, physical event serialization format, validation rules, replay metadata, authorization/security fields, ownership of result events and any additional domain-event topics.
 
 ## Documentation-only boundary
