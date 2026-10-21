@@ -55,7 +55,7 @@ The conceptual `ExecutePaymentOperation` command carries the following attribute
 }
 ```
 
-These examples illustrate agreed field roles. The exact wire schema/serialization, validation grammar, placement in Kafka headers versus body, timestamp formats, uniqueness constraints and whether `paymentId` will appear in the payload will be decided in subsequent contract design. No topic names or partition keys are finalized here.
+These examples illustrate agreed field roles. **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Avro with a Schema Registry and `FULL_TRANSITIVE`**, so the JSON shown here is illustrative, not the on-wire format. The precise Avro schema/validation grammar, Kafka header-versus-body layout, timestamp formats, uniqueness constraints and whether `paymentId` will appear in the payload remain open. No topic names or partition keys are finalized here.
 
 ## Identity semantics and replay
 
@@ -92,7 +92,7 @@ These examples illustrate agreed field roles. The exact wire schema/serializatio
 ## Not decided here
 
 - **[ADR-0012](0012-full-compatibility-for-kafka-command-schema-evolution.md) subsequently accepted Full Compatibility as the default**: compatible additive changes in both directions, with explicit migration for breaking changes and ongoing support for recoverable older records. Specific `schemaVersion` interpretation, supported-version retirement rules, on-wire unknown-field behavior and schema-registry approach remain open.
-- Whether this JSON example becomes the final on-wire encoding; field-format specifications, payload/headers placement, schema governance and validation errors.
+- **[ADR-0013](0013-apache-avro-schema-registry-full-transitive.md) subsequently selects Avro with Schema Registry / `FULL_TRANSITIVE` for the on-wire Kafka command family.** The JSON examples above remain conceptual representations of the logical fields, **not** final JSON wire messages. Exact Avro field formats, payload/headers placement, subject rules and validation errors remain open.
 - Whether `paymentId` appears in payload or only in the **future** Kafka record key; exact partition key/partitioner/consumer-group/topic names and counts.
 - Outbox publisher's practical identity-generation/lifecycle, Retry Scheduler deduplication key, dispatcher publication identity and concurrency.
 - Domain event publication (`PaymentAuthorized`/`PaymentCaptured`), PSP webhooks or future notification contracts.
