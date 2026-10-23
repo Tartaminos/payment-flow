@@ -63,7 +63,7 @@ The displayed quotes are for readability; **quote characters are not part of the
 
 ## Explicitly deferred decisions
 
-- Topic names, partition count, partitioner selection, expansion/migration policy, consumer groups and concurrency.
+- Topic names, partition count, partitioner selection, expansion/migration policy, consumer groups and numerical concurrency. **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) subsequently approves a bounded asynchronous worker model**, without committing production-scale sizing.
 - Whether `paymentId` should also be a field in the Avro command value.
 - Technical retry-message and DLQ key/record formats when they are **not** publishing `ExecutePaymentOperation` directly.
 - Exact Outbox/Dispatcher persistence schema and serializer configuration, schema-identity preservation and recovery mechanics.
