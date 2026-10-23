@@ -80,7 +80,7 @@ The following remain **proposals**, introduced for discussion but **not establis
 | Topic | `payment.operations.requested.v1` | Proposal |
 | Partition key | Stable `paymentId`, canonical UUID UTF-8 | **Approved subsequently in ADRs [0018](0018-payment-id-as-kafka-command-partition-key.md) and [0019](0019-canonical-utf8-uuid-kafka-command-key.md)** |
 | Consumer group | `payment-processors` | Proposal |
-| Partition count / consumer replicas | Intentionally modest, sized for local educational load | Undecided; bounded async worker model approved subsequently in [ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) |
+| Partition count / consumer replicas | **4 main-topic partitions / 1 consumer instance / 4 async workers** | **Approved subsequently in [ADR-0021](0021-small-mvp-kafka-partition-and-worker-topology.md)**; retry/DLQ topology and queue bound remain undecided |
 | Offset acknowledgment | Manual after durable outcome or independently recoverable handoff | **Approved by this ADR** |
 | Processing semantics | At-least-once with idempotency and reconciliation | **Approved assumption/contract** |
 
@@ -88,7 +88,7 @@ A timestamp varying per event should **not** be appended to the proposed partiti
 
 ## Further decisions needed
 
-- Final topic naming/boundaries and message envelopes; key, partition count, consumer-group topology and scaling.
+- Final topic naming/boundaries and message envelopes; key serialization and initial main-topic sizing were decided in ADRs 0018–0019 and **[0021](0021-small-mvp-kafka-partition-and-worker-topology.md)**. Exact topic names, consumer-group ID, other topics' partition counts, detailed intake limits and future scaling remain open.
 - **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) subsequently approves bounded asynchronous work off the Kafka poll thread and per-payment exclusion.** Offset commit tracking after asynchronous completions (always contiguous and durable), rebalance callbacks, poll loop and backpressure/worker mechanics still require detailed design.
 - Exact durable recovery mechanism for abandoned `PROCESSING` operations (lease expiry, status-check worker, scheduler, or other).
 - The trigger for `UNKNOWN` and the durable reconciliation work record/job; ability to recover after a crash even if no Kafka record is replayed.
