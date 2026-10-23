@@ -62,7 +62,7 @@ The key `paymentId` answers **which payment should share Kafka partition affinit
 
 ## Not yet approved
 
-- Exact Kafka topic names/counts, consumer-group topology, number of partitions, bounded-worker sizing and partition expansion/operational procedures. **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) sets the processing model**, not numerical capacity.
+- Exact Kafka topic names, consumer-group identity, other topics' partitions and partition expansion/operational procedures. **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) establishes the bounded asynchronous model and [ADR-0021](0021-small-mvp-kafka-partition-and-worker-topology.md) sets the starting main-topic/processor sizing to 4 partitions, 1 consumer instance and 4 workers.**
 - **[ADR-0019](0019-canonical-utf8-uuid-kafka-command-key.md) approves canonical lowercase UUID text encoded with UTF-8** for the key, not Avro. Exact serializer/configuration, topic partitioner and partition count remain open. `RecordNameStrategy` continues to govern **Avro value** subjects.
 - Whether `paymentId` also appears in the Avro value. `operationId` remains the required authoritative operation lookup field.
 - The single retry topic's technical record shape and whether that distinct wrapper also carries `paymentId` as its Kafka key; it must still preserve source references and remain safely recoverable. If it republishes the approved `ExecutePaymentOperation` record, this ADR's key applies.
