@@ -78,9 +78,9 @@ The following remain **proposals**, introduced for discussion but **not establis
 | Concern | Candidate | Status |
 | --- | --- | --- |
 | Topic | `payment.operations.requested.v1` | Proposal |
-| Partition key | Stable `paymentId` | Proposal |
+| Partition key | Stable `paymentId`, canonical UUID UTF-8 | **Approved subsequently in ADRs [0018](0018-payment-id-as-kafka-command-partition-key.md) and [0019](0019-canonical-utf8-uuid-kafka-command-key.md)** |
 | Consumer group | `payment-processors` | Proposal |
-| Partition count / consumer replicas | Sized after throughput and ordering analysis | Undecided |
+| Partition count / consumer replicas | Intentionally modest, sized for local educational load | Undecided; bounded async worker model approved subsequently in [ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) |
 | Offset acknowledgment | Manual after durable outcome or independently recoverable handoff | **Approved by this ADR** |
 | Processing semantics | At-least-once with idempotency and reconciliation | **Approved assumption/contract** |
 
@@ -89,7 +89,7 @@ A timestamp varying per event should **not** be appended to the proposed partiti
 ## Further decisions needed
 
 - Final topic naming/boundaries and message envelopes; key, partition count, consumer-group topology and scaling.
-- Offset commit execution strategy (per record, batches, asynchronous completions), rebalance callbacks, poll loop and per-partition concurrency control.
+- **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) subsequently approves bounded asynchronous work off the Kafka poll thread and per-payment exclusion.** Offset commit tracking after asynchronous completions (always contiguous and durable), rebalance callbacks, poll loop and backpressure/worker mechanics still require detailed design.
 - Exact durable recovery mechanism for abandoned `PROCESSING` operations (lease expiry, status-check worker, scheduler, or other).
 - The trigger for `UNKNOWN` and the durable reconciliation work record/job; ability to recover after a crash even if no Kafka record is replayed.
 - Poison-message classification and durable DLQ/quarantine (versus financial reconciliation) are approved in [ADR-0006](0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md). [ADR-0007](0007-single-kafka-retry-topic-and-dlq.md) subsequently approved a **single consumer retry topic and a single DLQ**, with durable forwarding before offset acknowledgment. Exact DLQ schema, delayed retry scheduling, redrive and monitoring/backpressure remain open.
