@@ -11,7 +11,7 @@ The PaymentFlow project is a **documentation-first educational architecture**, n
 
 Sequentially performing a blocking PSP HTTP call on a Kafka consumer/poll thread would make that thread unavailable while the simulated PSP is slow. A second candidate was to have Kafka consumers hand off command processing to a **small, bounded asynchronous worker pool**, while managing concurrency for each `Payment`.
 
-We have **not** approved any actual throughput, p95/p99 latency target, partition count, consumer replica count or worker-pool size. Prior examples of 20 or 40 commands/second were **teaching assumptions only**, not accepted system requirements.
+At this ADR's acceptance, numerical capacity remained open. **[ADR-0021](0021-small-mvp-kafka-partition-and-worker-topology.md) subsequently approves a small local baseline of 4 main-topic partitions, 1 Payment Processor Kafka consumer instance and 4 asynchronous worker slots.** No actual throughput or p95/p99 latency target is accepted. Prior examples of 20 or 40 commands/second were **teaching assumptions only**, not system requirements.
 
 ## Decision
 
@@ -24,7 +24,7 @@ We have **not** approved any actual throughput, p95/p99 latency target, partitio
 5. **Manual offset commits:** Submitting work to an in-memory queue, starting a background task or acknowledging an executor's acceptance **does not qualify as a durable processing result**. Under ADR-0005, a Kafka record becomes committable **only after** durable business state, a recoverable retry handoff, or quarantine. If different records from one partition finish out of order, acknowledge **only the highest contiguous eligible offset range**, never skip an earlier incomplete offset.
 6. **Consumer lifecycle:** A partition reassignment/rebalance, process crash or stalled worker must not cause an in-flight financial operation to be silently considered complete. Work with no recorded durable result may be redelivered and must safely recover using the same `PaymentOperation` and stable PSP identity. Worker cancellation, leases, rebalance coordination and polling liveness are future detailed-design topics.
 7. **Failure policy:** Transient Kafka-side failures follow the one-retry-topic and persistent-scheduler decisions (ADRs 0006–0009); uncertain PSP outcomes follow `UNKNOWN` and reconciliation, **not** an automatic new charge or unbounded PSP retry.
-8. **MVP scale:** Choose **few partitions, a small consumer group and a small worker pool** only after documenting a realistic local test scenario. No claim of high-scale performance, no arbitrary fixed throughput SLA and no need for elaborate distributed worker infrastructure in the MVP.
+8. **MVP scale:** Choose **few partitions, a small consumer group and a small worker pool** for local learning. **[ADR-0021](0021-small-mvp-kafka-partition-and-worker-topology.md) subsequently specifies 4 main-topic partitions, 1 Kafka consumer instance and 4 workers**. No claim of high-scale performance, no arbitrary fixed throughput SLA and no need for elaborate distributed worker infrastructure in the MVP.
 
 ## Conceptual flow
 
@@ -87,7 +87,7 @@ These boxes are **logical responsibilities**, not new services or Java class def
 
 ## Deliberate scope limits and open decisions
 
-- Number of main-topic partitions, consumer group size, worker count, queue bound and representative simulated test load; **all remain TBD**.
+- **[ADR-0021](0021-small-mvp-kafka-partition-and-worker-topology.md) resolves the initial main-topic/processor numbers:** 4 partitions, 1 Kafka consumer instance and 4 concurrent asynchronous workers. **Pending queue bound, backpressure details, retry/DLQ topic topology and representative simulated test load remain TBD.**
 - Worker scheduling fairness, maximum in-flight per partition, local keyed-queue implementation, backpressure and Kafka poll/rebalance strategy.
 - Durable DB operation claims, timeout/lease fencing and PSP request lifecycle; a local mutex does not satisfy BR-008 by itself.
 - Full technical retry record shape, scheduler persistence, dispatcher handoff and offset bookkeeping mechanics.
