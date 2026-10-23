@@ -43,7 +43,7 @@ The key `paymentId` answers **which payment should share Kafka partition affinit
 
 ## Ordering and safety limits
 
-- **Same topic, stable partitioning configuration:** records with the same serialized `paymentId` key are normally assigned to the same partition; a partition's log is ordered. This does **not** itself establish that financial actions happened in business order or that concurrently published commands arrive in an intended workflow sequence.
+- **Same topic, stable partitioning configuration:** records with the same serialized `paymentId` key are normally assigned to the same partition; a partition's log is ordered. This does **not** itself establish that financial actions happened in business order or that concurrently published commands arrive in an intended workflow sequence. **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) subsequently approves bounded asynchronous workers with per-payment exclusion**, while database safeguards remain authoritative.
 - **Different Kafka topics:** the main operations topic and retry topic have **independent logs**. Equal keys in those topics cannot impose any total order across them.
 - **Persistent retries:** a delayed command can be executed after a later command has already been observed or processed; successful durable handoff and scheduler eligibility do not turn Kafka into a cross-topic transaction sequencer.
 - **Partition-count/partitioner changes:** Kafka partition affinity for a fixed key can change after repartitioning or a partitioner/key-encoding change. Operational changes must preserve in-flight ordering assumptions safely; counts and expansion strategy are not set by this ADR.
@@ -62,7 +62,7 @@ The key `paymentId` answers **which payment should share Kafka partition affinit
 
 ## Not yet approved
 
-- Exact Kafka topic names/counts, consumer-group topology, number of partitions, producer/consumer concurrency and partition expansion/operational procedures.
+- Exact Kafka topic names/counts, consumer-group topology, number of partitions, bounded-worker sizing and partition expansion/operational procedures. **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) sets the processing model**, not numerical capacity.
 - **[ADR-0019](0019-canonical-utf8-uuid-kafka-command-key.md) approves canonical lowercase UUID text encoded with UTF-8** for the key, not Avro. Exact serializer/configuration, topic partitioner and partition count remain open. `RecordNameStrategy` continues to govern **Avro value** subjects.
 - Whether `paymentId` also appears in the Avro value. `operationId` remains the required authoritative operation lookup field.
 - The single retry topic's technical record shape and whether that distinct wrapper also carries `paymentId` as its Kafka key; it must still preserve source references and remain safely recoverable. If it republishes the approved `ExecutePaymentOperation` record, this ADR's key applies.
