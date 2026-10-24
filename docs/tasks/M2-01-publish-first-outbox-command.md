@@ -20,6 +20,7 @@ Publish a previously committed `ExecutePaymentOperation` Outbox intent to Kafka 
 
 ## Authoritative Sources
 
+- [M2 proposed implementation contract](../contracts/m2-outbox-kafka-contract.md) (**DRAFT — not approved**)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
 - [A11](../adr/0011-execute-payment-operation-command-envelope.md)
