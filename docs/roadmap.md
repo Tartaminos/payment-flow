@@ -22,9 +22,9 @@ Prefer pointers over repeated documentation. Do **not** prescribe class/controll
 
 This policy approves the **format**, not the M1 decomposition. Both M1 tasks and the implementation contract were approved on 2026-10-24 and are ready for user-initiated Codex execution.
 
-## Complete task planning inventory (proposal)
+## Complete task backlog (approved decomposition)
 
-The [proposed 21-slice project backlog](planning/proposed-complete-task-backlog.md) lists **M1-01/M1-02 as approved** and **19 proposed slices for M2–M6**, with observable outcomes, dependencies and necessary pre-implementation contracts. This is **planning only**; subsequent milestone scope, contracts and individual Markdown task files still require explicit approval before Codex execution.
+The [21-task backlog index](planning/proposed-complete-task-backlog.md) links all **21 six-section Markdown task files** under `docs/tasks/`. The user **approved the division** on 2026-10-24: **M1-01/M1-02 remain APPROVED for implementation**; all **19 M2–M6 files are PLANNED and not Codex-authorized** until their respective scope and contracts are approved. No runtime work is implied by task-file creation. See the [task review report](planning/task-backlog-review.md) for consistency checks and future contract gates.
 
 ## Milestones
 
