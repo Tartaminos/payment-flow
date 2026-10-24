@@ -1,6 +1,6 @@
 # PaymentFlow — Implementation Roadmap
 
-- **Status:** Roadmap established; **M1 and M2 contracts/tasks approved for sequential Codex implementation** (2026-10-24); M3–M6 remain proposed.
+- **Status:** Roadmap established; **all six milestones, six contracts and 21 tasks APPROVED for sequential Codex implementation** (2026-10-24). No implementation is implied by planning approval.
 - **Date:** 2026-10-24
 - **Source of truth:** This file, the [M1 specification](milestones/m1-payment-creation-idempotency.md), [business requirements](requirement/), [domain](domain/) and [accepted ADRs](adr/).
 - **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts, acceptance criteria **and task-brief structure** are approved and committed. No downstream design gap authorizes inventing financial business rules.
@@ -24,32 +24,28 @@ This policy approves the **format**, not the M1 decomposition. Both M1 tasks and
 
 ## Complete task backlog (approved decomposition)
 
-The [21-task backlog index](planning/proposed-complete-task-backlog.md) links all **21 six-section Markdown task files** under `docs/tasks/`. The user **approved the 21-task division** on 2026-10-24. **M1-01/M1-02 and M2-01/M2-02 are APPROVED for implementation in dependency order**; **17 M3–M6 files remain PLANNED and not Codex-authorized** until their respective scope and contracts are approved. No runtime work is implied by task-file creation. See the [task review report](planning/task-backlog-review.md) for consistency checks and future contract gates.
+The [21-task backlog index](planning/proposed-complete-task-backlog.md) links all **21 six-section Markdown task files** under `docs/tasks/`. The user **approved the 21-task division** on 2026-10-24. **All 21 tasks are APPROVED for implementation, gated by completion and independent verification of their Dependencies**. Approval does not mean tasks were executed. No runtime work is implied by task-file creation. See the [task review report](planning/task-backlog-review.md) for consistency checks and future contract gates.
 
 ## M2 approved transport and Publisher contract
 
 The [M2 Outbox/Kafka/Avro transport contract](contracts/m2-outbox-kafka-contract.md) is **APPROVED (2026-10-24)**. It defines a local KRaft broker + Schema Registry, the 4-partition/7-day main topic, the Avro record and **key-only `paymentId`**, and at-least-once lease/ack-based Publisher recovery. **Execution order:** finish/verify M1-01 → M1-02, then **[M2-01](tasks/M2-01-publish-first-outbox-command.md) → [M2-02](tasks/M2-02-recover-outbox-publication.md)**. Approval does not start Codex or deploy Kafka.
 
-## Complete downstream contract proposals (M3–M6: review required)
+## Approved downstream contracts (M3–M6)
 
-For a consolidated verification of the 17 tasks' design gates, see the [M3–M6 contract-decision review](planning/m3-m6-contract-decision-review.md). **All identified business/API/data/operational defaults now have explicit proposals**, but are not approved until reviewed.
+The user explicitly approved the four executable contracts on **2026-10-24**: [M3 — PSP simulator, active UNKNOWN recovery and Kafka offsets](contracts/m3-payment-processor-contract.md), [M4 — capture/void and authoritative expiry](contracts/m4-capture-void-expiration-contract.md), [M5 — technical retry, DLQ and persistent Scheduler](contracts/m5-technical-retry-dlq-scheduler-contract.md) and [M6 — reconciliation, traceability and end-to-end verification](contracts/m6-reconciliation-observability-acceptance-contract.md). **All 17 M3–M6 task files are APPROVED**, in addition to M1 and M2. See the [approved decision review](planning/m3-m6-contract-decision-review.md).
 
-
-
-The user requested a full pass over missing design decisions. Four **PROPOSED** executable contracts now cover the remaining **17 PLANNED** tasks: [M3 PSP/UNKNOWN/worker/offset contract](contracts/m3-payment-processor-contract.md), [M4 capture/void/expiry contract](contracts/m4-capture-void-expiration-contract.md), [M5 technical retry/DLQ/scheduler contract](contracts/m5-technical-retry-dlq-scheduler-contract.md) and [M6 reconciliation/observability/acceptance contract](contracts/m6-reconciliation-observability-acceptance-contract.md). They specify concrete operational defaults and close the key design questions **as proposals only**. **M3–M6 task statuses and Codex execution gates remain PLANNED / unapproved until explicit user sign-off**; M1/M2 approvals are unchanged. No running Java/Kafka/PSP system is implied.
-
-
+**Execution remains gated by task dependencies and independent specialist/test reviews; approval does not run Codex or start services.** M3 creates active independent AUTHORIZE UNKNOWN recovery, M4 extends it to CAPTURE/VOID before acknowledging their offsets, and M6 completes reconciliation/operability.
 
 | ID | Delivery | Status | Minimal demonstrable outcome |
 | --- | --- | --- | --- |
 | **M1** | **Payment Creation & Idempotency** | **APPROVED for Codex** | POST /payments persists Payment, initial AUTHORIZE PaymentOperation, idempotency association, audit and an Outbox publication intent in one transaction; returns durable acceptance, with tests. **No Kafka/PSP integration.** |
 | **M2** | Outbox Publisher & Kafka Transport | **APPROVED for Codex after M1** | Committed Outbox intents are published at least once to the main Kafka command topic with agreed paymentId key and Avro/Schema Registry value. |
-| **M3** | Payment Processor & Simulated Authorization | Proposed | One consumer decodes commands; bounded workers check DB state, call a fake PSP for AUTHORIZE, store definitive/unknown results and commit safe offsets. |
-| **M4** | Capture, Void & Domain Invariants | Proposed | Admitted capture/cancel operations respect authorization, expiry, single-full-capture and conflicting-operation rules. |
-| **M5** | Technical Retry, DLQ & Durable Scheduling | Proposed | Consumer technical errors have recoverable handoff to the single retry topic/DLQ; a persistent Retry Scheduler/Dispatcher redrives eligible work safely. |
-| **M6** | PSP Uncertainty, Reconciliation & Observability | Proposed | Ambiguous outcomes are independently reconciled/escalated, and tests/diagnostics exercise failure recovery and tracing. |
+| **M3** | Payment Processor & Simulated Authorization | **APPROVED for Codex after prerequisites** | One consumer decodes commands; bounded workers check DB state, call a fake PSP for AUTHORIZE, store definitive/unknown results and commit safe offsets. |
+| **M4** | Capture, Void & Domain Invariants | **APPROVED for Codex after prerequisites** | Admitted capture/cancel operations respect authorization, expiry, single-full-capture and conflicting-operation rules. |
+| **M5** | Technical Retry, DLQ & Durable Scheduling | **APPROVED for Codex after prerequisites** | Consumer technical errors have recoverable handoff to the single retry topic/DLQ; a persistent Retry Scheduler/Dispatcher redrives eligible work safely. |
+| **M6** | PSP Uncertainty, Reconciliation & Observability | **APPROVED for Codex after prerequisites** | Ambiguous outcomes are independently reconciled/escalated, and tests/diagnostics exercise failure recovery and tracing. |
 
-The overall sequence is a planning proposal; **M1 and M2 only** have approved execution contracts. This does not approve the exact internals or endpoints of M3–M6. PSP webhooks, advanced operational tooling and any ledger remain separate scope choices, not implicit commitments.
+The overall sequence is an **approved implementation plan**; individual tasks start only after prerequisite tasks pass their Codex verification gates. PSP webhooks, advanced operational tooling and any ledger remain outside approved scope.
 
 ## M1 approved execution slices
 
@@ -77,7 +73,7 @@ The API accepts requests durably; it does **not** report financial authorization
 
 **Bootstrap and containerization:** the user will generate the Spring Boot starter through Spring Initializr. **Approved for M1 local development (2026-10-24): Spring Boot runs from IntelliJ on the host**, with IDE console/debugger/DevTools; **PostgreSQL runs in a Docker container** managed via Docker Compose Support; [`compose.yaml`](../compose.yaml) now uses the `postgres:17` image and named `postgres_data` volume at `/var/lib/postgresql/data`. The user's Initializr selections include Maven, Java 21, Spring Boot 4.1.2, JAR and YAML. A Dockerfile for the API and complete application-in-containers mode remain open scope choices. Spring Boot's development-time Docker Compose integration does not itself dockerize the Java application.
 
-**Avoid speculative scaling:** local educational MVP, no production traffic target. When Kafka workers are implemented, the approved initial main-topic baseline is 4 partitions / 1 consumer instance / 4 async workers (ADR-0021). Backpressure queue sizes and detailed recovery are intentionally deferred until relevant.
+**Avoid speculative scaling:** local educational MVP, no production traffic target. When Kafka workers are implemented, the approved initial main-topic baseline is 4 partitions / 1 consumer instance / 4 async workers (ADR-0021). Backpressure bounds and detailed recovery contracts are **approved for M3–M6**; see the linked milestone contracts.
 
 ## Design references
 
