@@ -8,7 +8,7 @@ Admit one full capture operation through a replay-safe API without invoking the 
 
 ## Required Behavior
 
-- For a verified eligible `AUTHORIZED` Payment, a proposed capture endpoint atomically persists one `CAPTURE:PENDING`, scoped client idempotency, audit and a pending Outbox command referencing the operation.
+- For a verified eligible `AUTHORIZED` Payment, a proposed capture endpoint atomically persists one `CAPTURE:PENDING`, scoped client idempotency, audit and a pending Outbox command referencing the operation. **Fail closed without affirmative PSP ACTIVE authorization evidence**; do not wait for M4-04 to make admission safe.
 - Equivalent replay resolves to the same capture operation; changed parameters on a reused key conflict; a new key after `CAPTURED` returns `PAYMENT_ALREADY_CAPTURED`.
 - Reject concurrent or independently conflicting capture admissions while a previous operation is `PENDING`, `PROCESSING` or `UNKNOWN` when business-incompatible.
 
@@ -30,7 +30,7 @@ Admit one full capture operation through a replay-safe API without invoking the 
 
 ## Acceptance Criteria
 
-1. First eligible capture yields one operation, audit and Outbox intent; neither a PSP call nor duplicate admission occurs.
+1. First eligible capture yields one operation, audit and Outbox intent; **no PSP capture** or duplicate admission occurs. Expired/ambiguous PSP validity never admits a CAPTURE/Outbox, even before the M4-04 expiry-transition enhancement.
 2. Same-key retry returns original identity; differing request/key conflicts are enforced transactionally, including concurrent requests.
 3. Already CAPTURED or unresolved-conflicting operations cannot admit a second independent capture.
 
