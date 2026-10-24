@@ -8,7 +8,7 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 ## Required Behavior
 
-- Consume the existing CAPTURE command, revalidate authorized/eligible Payment state against PostgreSQL and call the fake PSP under the same stable operation identity. **Do not process capture when expiration validity is unresolved**; M4 sign-off requires the authoritative expiry guard in M4-04.
+- Consume the existing CAPTURE command, revalidate the Payment's authorization **and authoritative expiry evidence** using the guard established by M4-04, then call the fake PSP under the same stable operation identity **only if eligible**. If expiration is confirmed, do not call the PSP; if validity is unresolved, follow the M4 contract's safe deferral/resolution policy rather than assuming eligibility.
 - Only a confirmed full PSP capture transitions Payment to `CAPTURED` and CAPTURE operation to `SUCCEEDED`; update audit in the same transaction.
 - Duplicate or out-of-order records never cause a second charge; ambiguous outcomes remain UNKNOWN and cannot be recorded as success.
 
@@ -29,11 +29,12 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 ## Acceptance Criteria
 
-1. Confirmed full capture transitions `AUTHORIZED→CAPTURED` exactly once and persists successful operation/audit atomically.
+1. Confirmed full capture of an eligible, nonexpired authorization transitions `AUTHORIZED→CAPTURED` exactly once and persists successful operation/audit atomically.
 2. Duplicate CAPTURE command causes no additional financial attempt when original result is confirmed.
-3. Unknown/timed-out result does not falsely capture or discard original operation identity.
+3. Confirmed expiry or unresolved validity cannot result in an unsafe CAPTURE call; unknown/timed-out PSP results do not falsely capture or discard the original operation identity.
 
 ## Dependencies
 
 - [M4-01](M4-01-admit-idempotent-full-capture.md)
+- [M4-04](M4-04-guard-expired-authorizations.md)
 - M4 contract approval: fake PSP capture response/evidence and financial idempotency semantics.
