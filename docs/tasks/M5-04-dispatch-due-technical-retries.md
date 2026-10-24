@@ -20,6 +20,7 @@ Redispatch eligible technical retry schedules through a crash-safe durable hando
 
 ## Authoritative Sources
 
+- [M5 proposed implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**PROPOSED — review before implementation**)
 - [A8](../adr/0008-persistent-kafka-retry-scheduler.md)
 - [A9](../adr/0009-exponential-backoff-with-jitter-for-kafka-retries.md)
 - [A7](../adr/0007-single-kafka-retry-topic-and-dlq.md)
