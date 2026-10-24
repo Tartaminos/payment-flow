@@ -20,6 +20,7 @@ Admit and execute eligible void/cancellation against one existing authorization.
 
 ## Authoritative Sources
 
+- [M4 proposed implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**PROPOSED — review before implementation**)
 - [BR8](../requirement/BR-008-block-conflicting-financial-operations.md)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
