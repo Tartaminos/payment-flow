@@ -35,7 +35,7 @@ Publish a previously committed `ExecutePaymentOperation` Outbox intent to Kafka 
 
 ## Acceptance Criteria
 
-1. A committed pending M1 intent is observable as one decodable command with matching `messageId`, `operationId`, `correlationId` and `paymentId` key.
+1. A committed pending M1 intent produces **at least one** decodable Kafka command with matching `messageId`, `operationId`, `correlationId` and `paymentId` key; M2 does **not** assert exactly-once publication.
 2. Schema compatibility checks enforce `FULL_TRANSITIVE` and the correct record-name subject; a nullable `causationId` is supported.
 3. Incorrect/missing operation identity or key is not silently replaced by random data, and no PSP action occurs.
 
