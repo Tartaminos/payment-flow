@@ -91,6 +91,8 @@ Future system-design artifacts (functional/non-functional requirements, high-lev
 
 - [PaymentFlow implementation milestones](docs/roadmap.md) — **M1 scope approved**; M2–M6 are proposed stages pending separate approval.
 - [M1 — Payment Creation & Idempotency](docs/milestones/m1-payment-creation-idempotency.md) — initial REST API, PostgreSQL transactional persistence, idempotency, audit and **persisted but unpublished Outbox**. Kafka, PSP execution, workers and technical retries are intentionally outside M1. Merchant identity is a stable configured demo UUID (ADR-0023). Project bootstrap will be done by the user through Spring Initializr. API/DB/build contracts **and task-brief format** must be approved before Codex implementation.
+- **Task granularity approved:** Codex tasks will be **vertical slices** (independently verifiable capabilities across relevant layers), not controller/service/repository layer-by-layer tasks. Their template, representation, sequencing and validation conventions still require approval **before task creation**.
+- **Containerization under discussion:** Spring Initializr Docker Compose Support for PostgreSQL development is recommended; packaging the Java application in an image and running a complete Compose stack remain open scope decisions.
 
 ## Proposed technical direction (not yet an implementation decision)
 
