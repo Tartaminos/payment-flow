@@ -1,6 +1,6 @@
 # M6-01 — Resolve UNKNOWN by Original PSP Identity
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the local Codex orchestration skill **only after dependencies are complete and independently verified**; this approval neither launches Codex nor claims production compliance.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Safely reconcile an existing `UNKNOWN` financial operation using authoritative P
 
 ## Authoritative Sources
 
-- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
+- [M6 approved implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**APPROVED**)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR6](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
 - [BR7](../requirement/BR-007-bounded-psp-retries.md)
@@ -40,4 +40,4 @@ Safely reconcile an existing `UNKNOWN` financial operation using authoritative P
 - [M4-02](M4-02-execute-full-capture.md)
 - [M4-03](M4-03-void-authorized-payment.md)
 - [M5-04](M5-04-dispatch-due-technical-retries.md)
-- M6 contract approval: PSP status-query evidence, reconciliation eligibility, polling/backoff and crash recovery.
+- Approved [M6 implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md): PSP status-query evidence, reconciliation eligibility, polling/backoff and crash recovery.
