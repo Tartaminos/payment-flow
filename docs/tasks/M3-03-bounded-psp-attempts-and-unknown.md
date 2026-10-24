@@ -1,6 +1,6 @@
 # M3-03 — Safe PSP Attempts and UNKNOWN
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Run via the configured local Codex orchestration skill **only after prerequisite tasks are complete and independently verified**; documentation approval does not execute Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Apply safe, bounded PSP attempts while preserving ambiguous financial results.
 
 ## Authoritative Sources
 
-- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
+- [M3 approved implementation contract](../contracts/m3-payment-processor-contract.md) (**APPROVED**)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR6](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
 - [BR7](../requirement/BR-007-bounded-psp-retries.md)
@@ -37,4 +37,4 @@ Apply safe, bounded PSP attempts while preserving ambiguous financial results.
 ## Dependencies
 
 - [M3-01](M3-01-process-simulated-authorization.md)
-- M3 contract approval: PSP retry-safe semantics, timeout/error taxonomy and durable UNKNOWN recovery/offset policy.
+- Approved [M3 implementation contract](../contracts/m3-payment-processor-contract.md): PSP retry-safe semantics, timeout/error taxonomy and durable UNKNOWN recovery/offset policy.
