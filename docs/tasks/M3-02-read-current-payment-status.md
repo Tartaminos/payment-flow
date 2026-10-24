@@ -20,6 +20,7 @@ Expose the confirmed Payment state and associated operation status to the client
 
 ## Authoritative Sources
 
+- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
 - [STATES](../domain/payment-state-machines.md)
 - [DMODEL](../domain/relational-data-model.md)
