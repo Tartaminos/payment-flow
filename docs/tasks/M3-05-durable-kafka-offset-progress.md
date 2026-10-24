@@ -10,7 +10,7 @@ Make consumer-group progress reflect only contiguous durably processed or indepe
 
 - Use manual commits of the next offset after the highest **contiguous eligible record per partition**, even when later workers finish first.
 - Eligibility requires committed definitive state/audit, verified idempotent no-op or durable independent handoff; in-memory queueing and transient PSP replies never qualify.
-- For UNKNOWN without independent recovery implementation, **do not commit its offset**. Prevent premature progress under crashes/rebalances; M5 technical retry and M6 reconciliation later expand handoffs.
+- For UNKNOWN, commit only after durable UNKNOWN state/audit **and an active independent recovery scanner backed by a durable reconciliation job** (M3-03). Otherwise **do not commit its offset**. Prevent premature progress under crashes/rebalances; M5 and M6 extend existing handoffs.
 
 ## Scope Lock
 
@@ -31,7 +31,7 @@ Make consumer-group progress reflect only contiguous durably processed or indepe
 
 1. If offset N is not durable but N+1 is complete, commit does **not** advance past N; once N is eligible, contiguous progress can move safely.
 2. DB success then consumer crash/redelivery is idempotent; rebalance and queued-only work never skips a command.
-3. UNKNOWN without independently durable reconciliation remains unacknowledged; tests explicitly demonstrate this boundary.
+3. UNKNOWN without an active and independently recoverable reconciliation responsibility remains unacknowledged; with committed job plus functioning scanner, it becomes eligible only under contiguous per-partition ordering. Tests prove both cases.
 
 ## Dependencies
 
