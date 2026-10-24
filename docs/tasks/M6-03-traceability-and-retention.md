@@ -1,6 +1,6 @@
 # M6-03 — Traceability and Retention
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the local Codex orchestration skill **only after dependencies are complete and independently verified**; this approval neither launches Codex nor claims production compliance.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Make payment creation, external operation processing and recovery auditable and 
 
 ## Authoritative Sources
 
-- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
+- [M6 approved implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**APPROVED**)
 - [NFR1](../requirement/NFR-001-transaction-traceability-and-retention.md)
 - [A2](../adr/0002-append-only-audit-and-retention.md)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
@@ -38,4 +38,4 @@ Make payment creation, external operation processing and recovery auditable and 
 - [M3-05](M3-05-durable-kafka-offset-progress.md)
 - [M4-04](M4-04-guard-expired-authorizations.md)
 - [M5-04](M5-04-dispatch-due-technical-retries.md)
-- M6 contract approval: correlation convention, metrics/trace collection and realistic local retention enforcement.
+- Approved [M6 implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md): correlation convention, metrics/trace collection and realistic local retention enforcement.
