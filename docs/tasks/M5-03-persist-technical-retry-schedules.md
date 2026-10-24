@@ -20,6 +20,7 @@ Durably record retry timing for commands received on the technical retry topic.
 
 ## Authoritative Sources
 
+- [M5 proposed implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**PROPOSED — review before implementation**)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [A7](../adr/0007-single-kafka-retry-topic-and-dlq.md)
 - [A8](../adr/0008-persistent-kafka-retry-scheduler.md)
