@@ -28,6 +28,8 @@ Relevant accepted sources: [ADR-0004](../adr/0004-synchronous-acceptance-asynchr
 
 ### M3 — Payment Processor & Simulated Authorization (5 planned; implementation contracts pending)
 
+**M3 detailed proposal:** [PSP simulation, GET, active UNKNOWN recovery, bounded workers and offsets](../contracts/m3-payment-processor-contract.md). This proposal intentionally advances minimal active AUTHORIZE reconciliation into M3 so Kafka offsets do not rely on the later M6 for independent recovery. Status remains PLANNED.
+
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
 | [M3-01 — Consume & Resolve Authorization](../tasks/M3-01-process-simulated-authorization.md) | A Kafka command drives the **existing** AUTHORIZE operation through a simulated PSP and durably records confirmed approval or decline plus append-only audit, without a new PaymentOperation on redelivery. The PSP call does not block Kafka polling. | M2-02; approved fake PSP/command processing contract | **PLANNED** (not executable) |
@@ -42,6 +44,8 @@ Sources: [ADR-0005](../adr/0005-manual-kafka-offset-commit-and-recoverable-proce
 
 ### M4 — Capture, Void & Domain Invariants (4 planned; implementation contracts pending)
 
+**M4 detailed proposal:** [capture/void API, PSP-authoritative authorization validity, original-operation reconciliation](../contracts/m4-capture-void-expiration-contract.md). Approved task division unchanged: M4-01 → M4-04 → M4-02 → M4-03; active independent recovery is required for CAPTURE/VOID UNKNOWN before offsets advance. Status remains PLANNED.
+
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
 | [M4-01 — Idempotent Full Capture Admission](../tasks/M4-01-admit-idempotent-full-capture.md) | Proposed capture HTTP endpoint atomically admits one `CAPTURE:PENDING` and an Outbox intent for an eligible AUTHORIZED Payment; equivalent-key replay is stable; changed key/body, concurrent capture and unresolved/conflicting operations do not create another capture. | M3-05; capture API/idempotency contract | **PLANNED** (not executable) |
@@ -53,6 +57,8 @@ Sources: [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../
 
 ### M5 — Technical Retry, DLQ & Durable Scheduling (4 planned; implementation contracts pending)
 
+**M5 detailed proposal:** [retry/DLQ envelopes, retention protection, Scheduler/Dispatcher and handoff](../contracts/m5-technical-retry-dlq-scheduler-contract.md). Status remains PLANNED.
+
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
 | [M5-01 — Durable Technical Retry Handoff](../tasks/M5-01-durable-technical-retry-handoff.md) | Transient Kafka-processing/infrastructure failure transfers recoverable context to the **single retry topic** before source offset acknowledgment, without starting a new PSP financial operation. | M3-05; retry envelope/topic contract | **PLANNED** (not executable) |
@@ -63,6 +69,8 @@ Sources: [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../
 Sources: [ADR-0006](../adr/0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md), [ADR-0007](../adr/0007-single-kafka-retry-topic-and-dlq.md), [ADR-0008](../adr/0008-persistent-kafka-retry-scheduler.md), [ADR-0009](../adr/0009-exponential-backoff-with-jitter-for-kafka-retries.md). **No fixed retry-count-based DLQ for ongoing transient failures**; financial `UNKNOWN` takes the reconciliation path instead.
 
 ### M6 — PSP Reconciliation & Observability (4 planned; implementation contracts pending)
+
+**M6 detailed proposal:** [generalized reconciliation, 24h escalation, retention and E2E fault matrix](../contracts/m6-reconciliation-observability-acceptance-contract.md). Status remains PLANNED.
 
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
