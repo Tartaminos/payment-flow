@@ -1,6 +1,6 @@
 # M4-02 — Execute Confirmed Full Capture
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute through the local Codex orchestration skill **only after each dependency has passed independent verification**; M4 safe order is M4-01 → M4-04 → M4-02 → M4-03. Approval alone does not execute code.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 ## Authoritative Sources
 
-- [M4 proposed implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**PROPOSED — review before implementation**)
+- [M4 approved implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**APPROVED**)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [BR4](../requirement/BR-004-idempotent-capture-requests.md)
@@ -38,4 +38,4 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 - [M4-01](M4-01-admit-idempotent-full-capture.md)
 - [M4-04](M4-04-guard-expired-authorizations.md)
-- M4 contract approval: fake PSP capture response/evidence and financial idempotency semantics.
+- Approved [M4 implementation contract](../contracts/m4-capture-void-expiration-contract.md): fake PSP capture response/evidence and financial idempotency semantics.
