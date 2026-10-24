@@ -32,7 +32,7 @@ Process an existing AUTHORIZE command with a simulated PSP and record verified f
 
 1. PSP approval/decline maps to distinct confirmed Payment and Operation states with correlated audit atomically.
 2. Redelivery of a finalized operation makes no second PSP financial effect and preserves IDs.
-3. Kafka polling is not blocked by PSP HTTP; any uncommitted/in-flight record is **not acknowledged** solely because processing was dispatched.
+3. Kafka polling is not blocked by PSP HTTP; **consumer auto-commit is disabled from the first consumer slice**, and no uncommitted/in-flight record is acknowledged merely because processing was dispatched. Full contiguous offset commits remain M3-05.
 
 ## Dependencies
 
