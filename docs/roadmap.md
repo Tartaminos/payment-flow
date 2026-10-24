@@ -1,6 +1,6 @@
 # PaymentFlow — Implementation Roadmap
 
-- **Status:** Roadmap established; M1 approved for Codex implementation; M2–M6 remain proposed.
+- **Status:** Roadmap established; **M1 and M2 contracts/tasks approved for sequential Codex implementation** (2026-10-24); M3–M6 remain proposed.
 - **Date:** 2026-10-24
 - **Source of truth:** This file, the [M1 specification](milestones/m1-payment-creation-idempotency.md), [business requirements](requirement/), [domain](domain/) and [accepted ADRs](adr/).
 - **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts, acceptance criteria **and task-brief structure** are approved and committed. No downstream design gap authorizes inventing financial business rules.
@@ -24,24 +24,24 @@ This policy approves the **format**, not the M1 decomposition. Both M1 tasks and
 
 ## Complete task backlog (approved decomposition)
 
-The [21-task backlog index](planning/proposed-complete-task-backlog.md) links all **21 six-section Markdown task files** under `docs/tasks/`. The user **approved the division** on 2026-10-24: **M1-01/M1-02 remain APPROVED for implementation**; all **19 M2–M6 files are PLANNED and not Codex-authorized** until their respective scope and contracts are approved. No runtime work is implied by task-file creation. See the [task review report](planning/task-backlog-review.md) for consistency checks and future contract gates.
+The [21-task backlog index](planning/proposed-complete-task-backlog.md) links all **21 six-section Markdown task files** under `docs/tasks/`. The user **approved the 21-task division** on 2026-10-24. **M1-01/M1-02 and M2-01/M2-02 are APPROVED for implementation in dependency order**; **17 M3–M6 files remain PLANNED and not Codex-authorized** until their respective scope and contracts are approved. No runtime work is implied by task-file creation. See the [task review report](planning/task-backlog-review.md) for consistency checks and future contract gates.
 
-## Proposed M2 contract — review required
+## M2 approved transport and Publisher contract
 
-The [M2 Outbox/Kafka/Avro transport contract](contracts/m2-outbox-kafka-contract.md) is **DRAFT**. It proposes a local KRaft broker + Schema Registry, a 4-partition 7-day main topic, concrete Avro record and key, and at-least-once lease/ack-based publisher recovery. **M2-01 and M2-02 remain PLANNED, not authorized for Codex implementation** until the user approves this contract and M2 scope.
+The [M2 Outbox/Kafka/Avro transport contract](contracts/m2-outbox-kafka-contract.md) is **APPROVED (2026-10-24)**. It defines a local KRaft broker + Schema Registry, the 4-partition/7-day main topic, the Avro record and **key-only `paymentId`**, and at-least-once lease/ack-based Publisher recovery. **Execution order:** finish/verify M1-01 → M1-02, then **[M2-01](tasks/M2-01-publish-first-outbox-command.md) → [M2-02](tasks/M2-02-recover-outbox-publication.md)**. Approval does not start Codex or deploy Kafka.
 
 ## Milestones
 
 | ID | Delivery | Status | Minimal demonstrable outcome |
 | --- | --- | --- | --- |
 | **M1** | **Payment Creation & Idempotency** | **APPROVED for Codex** | POST /payments persists Payment, initial AUTHORIZE PaymentOperation, idempotency association, audit and an Outbox publication intent in one transaction; returns durable acceptance, with tests. **No Kafka/PSP integration.** |
-| **M2** | Outbox Publisher & Kafka Transport | Proposed | Committed Outbox intents are published at least once to the main Kafka command topic with agreed paymentId key and Avro/Schema Registry value. |
+| **M2** | Outbox Publisher & Kafka Transport | **APPROVED for Codex after M1** | Committed Outbox intents are published at least once to the main Kafka command topic with agreed paymentId key and Avro/Schema Registry value. |
 | **M3** | Payment Processor & Simulated Authorization | Proposed | One consumer decodes commands; bounded workers check DB state, call a fake PSP for AUTHORIZE, store definitive/unknown results and commit safe offsets. |
 | **M4** | Capture, Void & Domain Invariants | Proposed | Admitted capture/cancel operations respect authorization, expiry, single-full-capture and conflicting-operation rules. |
 | **M5** | Technical Retry, DLQ & Durable Scheduling | Proposed | Consumer technical errors have recoverable handoff to the single retry topic/DLQ; a persistent Retry Scheduler/Dispatcher redrives eligible work safely. |
 | **M6** | PSP Uncertainty, Reconciliation & Observability | Proposed | Ambiguous outcomes are independently reconciled/escalated, and tests/diagnostics exercise failure recovery and tracing. |
 
-This sequence is a **planning proposal**, not approval of the exact internals or endpoints of M2–M6. PSP webhooks, advanced operational tooling and any ledger remain separate scope choices, not implicit commitments.
+The overall sequence is a planning proposal; **M1 and M2 only** have approved execution contracts. This does not approve the exact internals or endpoints of M3–M6. PSP webhooks, advanced operational tooling and any ledger remain separate scope choices, not implicit commitments.
 
 ## M1 approved execution slices
 
