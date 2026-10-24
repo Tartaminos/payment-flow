@@ -94,11 +94,11 @@ The configured PSP request **timeout budgets** are 5s / 10s / 20s for at most **
 | `payment_id` | `UUID` | Foreign key to existing Payment; nullability during initial reservation is a design detail. |
 | `payment_operation_id` | `UUID` | Nullable foreign key where applicable. |
 | `created_at` | `TIMESTAMPTZ` | Required. |
-| `expires_at` | `TIMESTAMPTZ` | Retention/expiry policy is **not yet chosen**. |
+| `expires_at` | `TIMESTAMPTZ` | Nullable; **M1 keeps idempotency entries without automatic expiry/purge**, per [approved M1 contract](../contracts/m1-payment-creation-contract.md). Future expiry policy open. |
 
 Accepted uniqueness boundary: **(`merchant_id`, `operation_scope`, `key`)**. Equivalent repeated requests resolve to the original logical Payment/PaymentOperation; same key with different canonical request parameters is a conflict.
 
-The exact key expiry policy and safely handling a later replay after expiration are **still open**. The five-year audit policy does not automatically dictate idempotency-key retention. Canonical request hashing rules are also to be defined.
+**M1 decisions, approved 2026-10-24:** the [M1 contract](../contracts/m1-payment-creation-contract.md) defines SHA-256 of canonical validated `orderId`, integer `amount` and uppercase `currency`, as well as no automatic expiry/purge in the local M1. The eventual expiry/replay-after-expiry policy remains open for later milestones. Five-year audit retention does not automatically dictate idempotency retention.
 
 ## 4. `payment_audit_events`
 
@@ -133,7 +133,7 @@ The **four principal tables above remain the approved core domain model**. Subse
 
 | Additional table | Status | Responsibility |
 | --- | --- | --- |
-| `outbox_events` | **Architectural pattern accepted (ADR-0004)**; columns, constraints, and delivery mechanism not yet designed. | Persist publication intent in the **same database transaction** as accepted Payment/PaymentOperation/idempotency/audit changes, so a committed payment cannot lose its processing intent on a subsequent Kafka failure. |
+| `outbox_events` | **Pattern accepted (ADR-0004), M1 minimal persistence contract approved** in [M1 contract](../contracts/m1-payment-creation-contract.md); publisher/delivery mechanisms are later milestones. | Persist publication intent in the **same database transaction** as accepted Payment/PaymentOperation/idempotency/audit changes, so a committed payment cannot lose its processing intent on a subsequent Kafka failure. |
 | `psp_webhook_inbox` | **Candidate for future design**; not yet approved. | Deduplicate and process PSP callbacks safely if/when the PSP webhook contract is designed. |
 | `scheduled_retries` | **Persistent scheduling responsibility accepted (ADR-0008)**; table name and PostgreSQL physical schema **not yet approved**. | Candidate to durably track consumer-retry eligibility, attempt metadata, status and deduplication; distinct from PSP financial HTTP retries and financial reconciliation. |
 
@@ -147,7 +147,7 @@ No SQL, runtime services, event payloads or infrastructure are created by this d
 - Whether the authorization/capture *attempt* identity needs more structure when retries and multiple providers are introduced.
 - `merchant_id` validation without a local merchant table, multi-tenant boundary enforcement.
 - PSP provider scoping, definitive result-code taxonomy, whether `psp_idempotency_key` must be immediately non-null before dispatch.
-- Idempotency-key expiry/retention policy, canonical request hash fields and concurrent initial reservation.
+- Future idempotency-key expiry/purge policy remains open; **M1** no-expiry key policy, canonical hash fields, and unique/transactional concurrent admission are approved in the [M1 contract](../contracts/m1-payment-creation-contract.md).
 - Exact behavior and eventual terminal status of technical failures after a Payment remains `CREATED`.
 - Detailed event ordering, audit retention start, and storage optimization.
 - Retry intervals between attempts (distinct from the agreed **request timeouts** 5s / 10s / 20s).
