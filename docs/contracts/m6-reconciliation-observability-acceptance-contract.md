@@ -1,7 +1,7 @@
 # M6 — Reconciliation, Escalation, Retention & End-to-End Acceptance Contract
 
-- **Status:** **PROPOSED — pending explicit user approval** (2026-10-24). All M6 task files remain PLANNED.
-- **Authority:** [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md), [BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md), [NFR-001](../requirement/NFR-001-transaction-traceability-and-retention.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0005](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md), and the [M3](m3-payment-processor-contract.md)/[M4](m4-capture-void-expiration-contract.md)/[M5](m5-technical-retry-dlq-scheduler-contract.md) proposals.
+- **Status:** **APPROVED for M6 implementation** (2026-10-24). The user explicitly accepted this contract and all four M6 tasks. Execute only after their earlier task dependencies are verified through local Codex.
+- **Authority:** [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-005](../requirement/BR-005-reconciliation-after-24h-unknown.md), [BR-006](../requirement/BR-006-distinguish-technical-failure-from-decline.md), [NFR-001](../requirement/NFR-001-transaction-traceability-and-retention.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0005](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md), and the **approved** [M3](m3-payment-processor-contract.md)/[M4](m4-capture-void-expiration-contract.md)/[M5](m5-technical-retry-dlq-scheduler-contract.md) contracts.
 - **Principle:** Reconciliation is evidence-based **status lookup of the original external operation**, not a new financial charge or an excuse to mark UNKNOWN as FAILED.
 
 ## M6-01 — Generalize active reconciliation
@@ -50,4 +50,4 @@
 
 No live PSP, PCI certification, production HA/multi-region, automatic refunds, arbitrary admin mutation of Payment status, revenue ledger or externally exposed audit dashboard. M6 is the **verification/completion milestone** of the planned educational system, not a production compliance certification.
 
-**Sequence:** [M6-01](../tasks/M6-01-resolve-original-unknown-psp-operations.md) → [M6-02](../tasks/M6-02-escalate-unknown-after-24h.md) / [M6-03](../tasks/M6-03-traceability-and-retention.md) → [M6-04](../tasks/M6-04-end-to-end-failure-recovery.md). All remain PLANNED until explicit user acceptance of this contract and its upstream contracts.
+**Sequence:** [M6-01](../tasks/M6-01-resolve-original-unknown-psp-operations.md) → [M6-02](../tasks/M6-02-escalate-unknown-after-24h.md) / [M6-03](../tasks/M6-03-traceability-and-retention.md) → [M6-04](../tasks/M6-04-end-to-end-failure-recovery.md). All four M6 tasks and their upstream contracts were **APPROVED (2026-10-24)**. They are eligible for deliberate Codex invocation after task dependencies are verified; approval does not itself execute code.
