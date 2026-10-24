@@ -1,6 +1,6 @@
 # M2-02 — Reliable Outbox Recovery
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24), **after M2-01 is complete and verified**. Execute through the locally configured Codex orchestration skill; approval does not launch Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Make accepted Outbox work recoverable across broker outages, crashes and duplica
 
 ## Authoritative Sources
 
-- [M2 proposed implementation contract](../contracts/m2-outbox-kafka-contract.md) (**DRAFT — not approved**)
+- [M2 approved implementation contract](../contracts/m2-outbox-kafka-contract.md) (**APPROVED**)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
 - [A11](../adr/0011-execute-payment-operation-command-envelope.md)
 - [A17](../adr/0017-avro-payload-as-command-source-kafka-headers-for-transport.md)
@@ -35,4 +35,4 @@ Make accepted Outbox work recoverable across broker outages, crashes and duplica
 ## Dependencies
 
 - [M2-01](M2-01-publish-first-outbox-command.md)
-- M2 contract approval: claim/lease policy, broker durability acknowledgment, delivery state and publisher recovery/retention.
+- [Approved M2 Publisher recovery contract](../contracts/m2-outbox-kafka-contract.md): claim/lease, broker durability acknowledgment, delivery progress, retries and retention.
