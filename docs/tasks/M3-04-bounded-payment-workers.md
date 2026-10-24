@@ -1,6 +1,6 @@
 # M3-04 — Bounded Parallel Payment Processing
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Run via the configured local Codex orchestration skill **only after prerequisite tasks are complete and independently verified**; documentation approval does not execute Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Process different payments concurrently without overlapping conflicting operatio
 
 ## Authoritative Sources
 
-- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
+- [M3 approved implementation contract](../contracts/m3-payment-processor-contract.md) (**APPROVED**)
 - [A20](../adr/0020-bounded-async-payment-processing-with-per-payment-exclusion.md)
 - [A21](../adr/0021-small-mvp-kafka-partition-and-worker-topology.md)
 - [A22](../adr/0022-bounded-per-payment-waiting-queue.md)
@@ -37,4 +37,4 @@ Process different payments concurrently without overlapping conflicting operatio
 
 - [M3-01](M3-01-process-simulated-authorization.md)
 - [M3-03](M3-03-bounded-psp-attempts-and-unknown.md)
-- M3 contract approval: numeric per-payment/global limits, fairness, poll/pause/resume and rebalance safety.
+- Approved [M3 implementation contract](../contracts/m3-payment-processor-contract.md): numeric per-payment/global limits, fairness, poll/pause/resume and rebalance safety.
