@@ -1,6 +1,7 @@
 # M1 — Payment Creation & Idempotency
 
 - **Status:** Scope approved on 2026-10-24. **Implementation not yet authorized until the pre-coding contracts below are approved and committed.**
+- **Approved task design:** when we later prepare tasks for Codex, each must be a **vertical slice** with independently verifiable behavior; no tasks have been created or approved yet.
 - **Roadmap:** [PaymentFlow milestones](../roadmap.md)
 - **Relevant source:** [BR-001](../requirement/BR-001-idempotent-payment-requests.md), [BR-008](../requirement/BR-008-block-conflicting-financial-operations.md), [ADR-0001](../adr/0001-separate-payment-and-payment-operations.md), [ADR-0002](../adr/0002-append-only-audit-and-retention.md), [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0010](../adr/0010-generic-execute-payment-operation-command.md), [ADR-0023 — Configured merchant](../adr/0023-configured-single-merchant-for-educational-mvp.md), [Domain model](../domain/relational-data-model.md)
 
@@ -46,7 +47,7 @@ Build the first runnable **local** vertical slice: accept an idempotent payment 
 1. **API contract:** request/response payload for `POST /payments`, validation and error envelopes, replay/concurrent-race HTTP response semantics, final confirmation of proposed `202`/`409`. **Merchant identity source is already decided** in ADR-0023.
 2. **Idempotency rules:** canonical request hashing, precise merchant + operation + key scope, race resolution/unique constraints and minimum retention behavior. The conceptual model specifies the scope but not all physical rules.
 3. **Physical persistence:** PostgreSQL migration design for the four accepted core entities **plus an Outbox supporting table**; transaction boundaries, outbox identity/publication state, and minimal future key/schema references. No Kafka publisher yet.
-4. **Build/testing baseline:** user boots the project via Spring Initializr; decide Java/Spring Boot/dependency versions, build tool, local PostgreSQL setup and automated integration-test strategy.
+4. **Build/testing baseline:** user boots the project via Spring Initializr; decide Java/Spring Boot/dependency versions, build tool, local PostgreSQL setup and automated integration-test strategy. **Docker Compose Support for local PostgreSQL is recommended but not yet an accepted M1 dependency.** Separately decide whether an API Dockerfile and full application Compose run belong in M1.
 5. **Task/orchestration format gate:** before creating any tasks/briefs, inspect the exact orchestration skill in `Tartaminos/agent_benchmark` / branch `remove-agents-from-flow`, discuss how tasks are grouped, represented, reviewed and sequenced, and explicitly approve that structure. The verified path is `Tartaminos/agent_benchmark/.agents/skills/software-development-workflow/SKILL.md` on `remove-agents-from-flow`. The skill uses Scope Lock plus architect, coder and test-engineer gates for backend implementation. How to expose the external skill to Codex inside `payment-flow` and the task shape are still undecided. **Do not generate tasks or briefs yet.**
 6. **Codex execution artifact:** only after gate 5, create approved task(s) with precise scope and executable acceptance tests; commit them before coding.
 
