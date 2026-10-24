@@ -89,6 +89,9 @@ Future system-design artifacts (functional/non-functional requirements, high-lev
 
 ## Implementation roadmap
 
+- [Complete 21-task vertical-slice backlog](docs/planning/proposed-complete-task-backlog.md) — task division approved; 2 M1 tasks implementation-ready, 19 M2–M6 tasks planned and gated.
+- [Backlog review](docs/planning/task-backlog-review.md) — full-file/link/dependency check, corrections, and unresolved contract gates before later milestone execution.
+
 - [PaymentFlow implementation milestones](docs/roadmap.md) — **M1 approved for Codex implementation**; M2–M6 remain proposed.
 - [M1 — Payment Creation & Idempotency](docs/milestones/m1-payment-creation-idempotency.md) — initial REST API, PostgreSQL transactional persistence, idempotency, audit and **persisted but unpublished Outbox**. Kafka, PSP execution, workers and technical retries are intentionally outside M1. Merchant identity is a stable configured demo UUID (ADR-0023). Project bootstrap will be done by the user through Spring Initializr. M1 contracts and six-section task format are now approved for user-initiated Codex implementation.
 - **M1 APPROVED tasks and contract:** [API/idempotency/Outbox contract](docs/contracts/m1-payment-creation-contract.md), [M1-01 transactional admission](docs/tasks/M1-01-transactional-payment-acceptance.md), then [M1-02 idempotency/concurrency](docs/tasks/M1-02-idempotent-replay-and-concurrent-requests.md). Run them sequentially using the configured local Codex orchestration skill.
