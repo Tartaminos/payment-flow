@@ -32,6 +32,10 @@ The [M2 Outbox/Kafka/Avro transport contract](contracts/m2-outbox-kafka-contract
 
 ## Complete downstream contract proposals (M3–M6: review required)
 
+For a consolidated verification of the 17 tasks' design gates, see the [M3–M6 contract-decision review](planning/m3-m6-contract-decision-review.md). **All identified business/API/data/operational defaults now have explicit proposals**, but are not approved until reviewed.
+
+
+
 The user requested a full pass over missing design decisions. Four **PROPOSED** executable contracts now cover the remaining **17 PLANNED** tasks: [M3 PSP/UNKNOWN/worker/offset contract](contracts/m3-payment-processor-contract.md), [M4 capture/void/expiry contract](contracts/m4-capture-void-expiration-contract.md), [M5 technical retry/DLQ/scheduler contract](contracts/m5-technical-retry-dlq-scheduler-contract.md) and [M6 reconciliation/observability/acceptance contract](contracts/m6-reconciliation-observability-acceptance-contract.md). They specify concrete operational defaults and close the key design questions **as proposals only**. **M3–M6 task statuses and Codex execution gates remain PLANNED / unapproved until explicit user sign-off**; M1/M2 approvals are unchanged. No running Java/Kafka/PSP system is implied.
 
 
