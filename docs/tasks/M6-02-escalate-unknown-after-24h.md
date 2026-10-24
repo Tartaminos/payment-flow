@@ -20,6 +20,7 @@ Make unresolved PSP operations older than 24 hours visible for required reconcil
 
 ## Authoritative Sources
 
+- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
 - [BR5](../requirement/BR-005-reconciliation-after-24h-unknown.md)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR8](../requirement/BR-008-block-conflicting-financial-operations.md)
