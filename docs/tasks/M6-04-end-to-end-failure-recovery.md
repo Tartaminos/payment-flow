@@ -20,6 +20,7 @@ Demonstrate that PaymentFlow recovers safely from realistic failures across the 
 
 ## Authoritative Sources
 
+- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR5](../requirement/BR-005-reconciliation-after-24h-unknown.md)
 - [BR6](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
