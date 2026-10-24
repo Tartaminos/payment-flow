@@ -1,10 +1,10 @@
 # PaymentFlow — Complete Vertical-Slice Task Backlog
 
-- **Status:** **21-task vertical-slice breakdown APPROVED (2026-10-24)**. Only **M1-01/M1-02** are approved for **Codex implementation**; all **19 M2–M6 tasks are PLANNED / implementation-blocked** pending their milestone scope and contracts.
+- **Status:** **21-task vertical-slice breakdown APPROVED (2026-10-24)**. **M1-01/M1-02 and M2-01/M2-02 are approved for sequential Codex implementation**; the **17 M3–M6 tasks remain PLANNED / implementation-blocked** pending their milestone scope and contracts.
 - **Scope:** Approved task decomposition against the [six-milestone roadmap](../roadmap.md), **not** an approval of M2–M6 milestone internals or contracts.
 - **Review:** [Full 21-task consistency review](task-backlog-review.md) — six-section structure, links, dependency graph and cross-milestone risk gates.
 - **Task policy:** One short, independently demonstrable vertical slice per Markdown file under `docs/tasks/`, with **Objective, Required Behavior, Scope Lock, Authoritative Sources, Acceptance Criteria, Dependencies**. The Architect determines internal Java design.
-- **All 21 Markdown task files exist** under `docs/tasks/`. M2–M6 files are approved **as backlog decomposition only**; do **not** execute them through Codex until the respective milestone and missing contracts are explicitly accepted. This page is the planning index, not an implementation authorization.
+- **All 21 Markdown task files exist** under `docs/tasks/`. M3–M6 files are approved **as backlog decomposition only**; do **not** execute them through Codex until the respective milestone and missing contracts are explicitly accepted. M2's detailed contract and both tasks were approved on 2026-10-24, with execution dependent on verified M1 completion. This page is the planning index, not an implementation authorization.
 
 ## Backlog: 21 slices total (approved split; milestone gates preserved)
 
@@ -15,16 +15,16 @@
 | [M1-01 — Transactional Payment Acceptance](../tasks/M1-01-transactional-payment-acceptance.md) | `POST /payments` validates input and commits Payment, AUTHORIZE/PENDING operation, scoped idempotency, audit and a pending Outbox record atomically; returns `202` after commit. | Approved [M1 contract](../contracts/m1-payment-creation-contract.md) | **APPROVED** |
 | [M1-02 — Idempotent Replay & Concurrency](../tasks/M1-02-idempotent-replay-and-concurrent-requests.md) | Equivalent replay returns the original Payment; conflicting key usage returns `409`; concurrent first requests create one logical payment. | M1-01 | **APPROVED** |
 
-### M2 — Outbox Publisher & Kafka Transport (2 planned; implementation contracts pending)
+### M2 — Outbox Publisher & Kafka Transport (2 approved; after M1)
 
-**M2 contract under review:** [draft Outbox/Kafka/Avro implementation contract](../contracts/m2-outbox-kafka-contract.md). This proposal does not change the PLANNED implementation status of either M2 task.
+**Approved M2 contract (2026-10-24):** [Outbox/Kafka/Avro implementation contract](../contracts/m2-outbox-kafka-contract.md), including the accepted Avro record, Kafka key-only `paymentId`, topic and leasing/recovery rules. Run M2-01 then M2-02 **after finishing and verifying M1**.
 
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
-| [M2-01 — First Outbox Command Published](../tasks/M2-01-publish-first-outbox-command.md) | A committed `ExecutePaymentOperation` Outbox intent becomes a decodable Avro command in local Kafka using Schema Registry, `RecordNameStrategy`, `FULL_TRANSITIVE`, and the canonical `paymentId` UTF-8 key. Broker/registry in local Docker; command carries accepted identities, no real PSP processing. | M1-02; approved Kafka/Avro/topic contract | **PLANNED** (not executable) |
-| [M2-02 — Reliable Outbox Recovery](../tasks/M2-02-recover-outbox-publication.md) | Kafka downtime and publisher crash leave pending work recoverable; retries can republish the **same logical messageId** at least once and mark delivery progress only after durable broker acknowledgment. Verify no payment disappears and duplicate publication remains possible/safe. | M2-01; approved claiming/retry contract | **PLANNED** (not executable) |
+| [M2-01 — First Outbox Command Published](../tasks/M2-01-publish-first-outbox-command.md) | A committed `ExecutePaymentOperation` Outbox intent becomes a decodable Avro command in local Kafka using Schema Registry, `RecordNameStrategy`, `FULL_TRANSITIVE`, and the canonical `paymentId` UTF-8 key. Broker/registry in local Docker; command carries accepted identities, no real PSP processing. | M1-02; [approved M2 contract](../contracts/m2-outbox-kafka-contract.md) | **APPROVED** (after M1) |
+| [M2-02 — Reliable Outbox Recovery](../tasks/M2-02-recover-outbox-publication.md) | Kafka downtime and publisher crash leave pending work recoverable; retries can republish the **same logical messageId** at least once and mark delivery progress only after durable broker acknowledgment. Verify no payment disappears and duplicate publication remains possible/safe. | M2-01; [approved M2 contract](../contracts/m2-outbox-kafka-contract.md) | **APPROVED** (after M2-01) |
 
-Relevant accepted sources: [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0010](../adr/0010-generic-execute-payment-operation-command.md), ADRs [0011](../adr/0011-execute-payment-operation-command-envelope.md)–[0019](../adr/0019-canonical-utf8-uuid-kafka-command-key.md). **Topic names, final Avro record/namespace, schema-ID handling, publisher claiming and publish recovery still need detailed agreement.**
+Relevant accepted sources: [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0010](../adr/0010-generic-execute-payment-operation-command.md), ADRs [0011](../adr/0011-execute-payment-operation-command-envelope.md)–[0019](../adr/0019-canonical-utf8-uuid-kafka-command-key.md). **M2 resolves topic naming, Avro record/namespace, schema-ID wire identity, Publisher claiming and recovery in its approved contract.**
 
 ### M3 — Payment Processor & Simulated Authorization (5 planned; implementation contracts pending)
 
@@ -77,12 +77,12 @@ Sources: [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-005](../
 
 **Default implementation sequence:** `M1-01 → M1-02 → M2-01 → M2-02 → M3-01 → M3-02 → M3-03 → M3-04 → M3-05 → M4-01 → M4-02 → M4-03 → M4-04 → M5-01 → M5-02 → M5-03 → M5-04 → M6-01 → M6-02 → M6-03 → M6-04`. Task dependencies above, not this total order, are authoritative after review.
 
-**Before authorizing M2–M6 tasks for Codex, decide contracts in this order:**
+**Before authorizing M3–M6 tasks for Codex, decide contracts in this order:**
 
-1. **M2 transport:** Kafka and Schema Registry local runtime; topic names and retention; Avro record namespace/name, `paymentId` in value or key only, serializer/schema validation and recovery/claiming behavior.
+1. **M2 transport — APPROVED 2026-10-24:** [M2 contract](../contracts/m2-outbox-kafka-contract.md) settles Kafka and Schema Registry local runtime, topic/retention, Avro record and key-only `paymentId`, serializer/schema validation and Publisher recovery/claiming. No additional M2 approval is required before user-initiated implementation after M1.
 2. **M3 PSP and concurrency:** fake PSP contract (approved/declined/ambiguous/technical, safe idempotency, status query), GET status endpoint choice, bounded global/per-payment queue sizes and backpressure, manual contiguous offset-tracker and UNKNOWN durable recovery rules.
 3. **M4 financial API:** capture/void HTTP contracts, scoped idempotency and operation admission, authoritative expiry confirmation and failures.
 4. **M5 technical resilience:** retry/DLQ record contracts, durable transfer proof, scheduler deduplication/storage, dispatcher claim/lease and safe replay.
 5. **M6 operational semantics:** PSP reconciliation evidence, 24-hour escalation representation, correlation/metrics/retention mechanics and failure-injection tests.
 
-**Review gate:** The user approved this **21-task division** on 2026-10-24. All individual six-section Markdown files now exist. Only M1 is Codex-ready; M2–M6 require their own scope and contracts before implementation, and unresolved architecture choices must not be invented by agents.
+**Review gate:** The user approved this **21-task division** on 2026-10-24. All individual six-section Markdown files now exist. **M1 and M2** are Codex-ready in dependency order; M3–M6 still require their own scope and contracts before implementation. Unresolved architecture choices must not be invented by agents.
