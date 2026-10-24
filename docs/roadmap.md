@@ -30,7 +30,11 @@ The [21-task backlog index](planning/proposed-complete-task-backlog.md) links al
 
 The [M2 Outbox/Kafka/Avro transport contract](contracts/m2-outbox-kafka-contract.md) is **APPROVED (2026-10-24)**. It defines a local KRaft broker + Schema Registry, the 4-partition/7-day main topic, the Avro record and **key-only `paymentId`**, and at-least-once lease/ack-based Publisher recovery. **Execution order:** finish/verify M1-01 → M1-02, then **[M2-01](tasks/M2-01-publish-first-outbox-command.md) → [M2-02](tasks/M2-02-recover-outbox-publication.md)**. Approval does not start Codex or deploy Kafka.
 
-## Milestones
+## Complete downstream contract proposals (M3–M6: review required)
+
+The user requested a full pass over missing design decisions. Four **PROPOSED** executable contracts now cover the remaining **17 PLANNED** tasks: [M3 PSP/UNKNOWN/worker/offset contract](contracts/m3-payment-processor-contract.md), [M4 capture/void/expiry contract](contracts/m4-capture-void-expiration-contract.md), [M5 technical retry/DLQ/scheduler contract](contracts/m5-technical-retry-dlq-scheduler-contract.md) and [M6 reconciliation/observability/acceptance contract](contracts/m6-reconciliation-observability-acceptance-contract.md). They specify concrete operational defaults and close the key design questions **as proposals only**. **M3–M6 task statuses and Codex execution gates remain PLANNED / unapproved until explicit user sign-off**; M1/M2 approvals are unchanged. No running Java/Kafka/PSP system is implied.
+
+
 
 | ID | Delivery | Status | Minimal demonstrable outcome |
 | --- | --- | --- | --- |
