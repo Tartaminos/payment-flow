@@ -45,9 +45,9 @@ Sources: [ADR-0005](../adr/0005-manual-kafka-offset-commit-and-recoverable-proce
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
 | [M4-01 — Idempotent Full Capture Admission](../tasks/M4-01-admit-idempotent-full-capture.md) | Proposed capture HTTP endpoint atomically admits one `CAPTURE:PENDING` and an Outbox intent for an eligible AUTHORIZED Payment; equivalent-key replay is stable; changed key/body, concurrent capture and unresolved/conflicting operations do not create another capture. | M3-05; capture API/idempotency contract | **PLANNED** (not executable) |
-| [M4-02 — Execute Capture](../tasks/M4-02-execute-full-capture.md) | Generic worker consumes the admitted CAPTURE operation and records a **confirmed** full capture as `Payment:CAPTURED` / `CAPTURE:SUCCEEDED` with audit. Duplicate delivery cannot capture twice. | M4-01; fake PSP capture semantics | **PLANNED** (not executable) |
-| [M4-03 — Void Authorized Payment](../tasks/M4-03-void-authorized-payment.md) | Proposed void/cancel endpoint and generic worker execute an eligible VOID once, preserving original operation identity and yielding `CANCELED` **only on confirmed PSP void**. Block conflicting/unknown operations. | M4-02 (reuses generalized processing); void API/provider contract | **PLANNED** (not executable) |
-| [M4-04 — Expired Authorization Guard](../tasks/M4-04-guard-expired-authorizations.md) | Definitively expired authorizations become `EXPIRED` with audit and cannot be captured; provide a specific capture conflict. A timestamp, timeout or missing response **alone** never proves PSP expiry, and confirmed CAPTURED is never overwritten. | M4-01, M4-02; expiry-evidence contract | **PLANNED** (not executable) |
+| [M4-04 — Expired Authorization Guard](../tasks/M4-04-guard-expired-authorizations.md) | Guard capture admission against **authoritatively** expired authorizations; transition to `EXPIRED` with audit and produce no CAPTURE/Outbox. An unconfirmed timestamp/timeout is not proof of expiry. | M4-01; expiry-evidence contract | **PLANNED** (not executable) |
+| [M4-02 — Execute Capture](../tasks/M4-02-execute-full-capture.md) | Generic worker reuses the expiry guard before calling PSP for an eligible CAPTURE and records confirmed `Payment:CAPTURED` / `CAPTURE:SUCCEEDED`. Duplicate delivery cannot capture twice. | M4-01, M4-04; fake PSP capture semantics | **PLANNED** (not executable) |
+| [M4-03 — Void Authorized Payment](../tasks/M4-03-void-authorized-payment.md) | Proposed void/cancel endpoint and generic worker execute an eligible VOID once, preserving original operation identity and yielding `CANCELED` **only on confirmed PSP void**. Block conflicting/unknown operations. | M4-02; void API/provider contract | **PLANNED** (not executable) |
 
 Sources: [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../requirement/BR-004-idempotent-capture-requests.md), [BR-008](../requirement/BR-008-block-conflicting-financial-operations.md), [state machines](../domain/payment-state-machines.md). **Capture/void endpoint shapes, provider evidence, expiry timing and error envelopes remain to be agreed.** Ordering of M4-04 relative to M4-02 can be refined once contracts are fixed.
 
@@ -75,7 +75,7 @@ Sources: [BR-002](../requirement/BR-002-uncertain-psp-outcomes.md), [BR-005](../
 
 ## Dependency chain and planning gates
 
-**Default implementation sequence:** `M1-01 → M1-02 → M2-01 → M2-02 → M3-01 → M3-02 → M3-03 → M3-04 → M3-05 → M4-01 → M4-02 → M4-03 → M4-04 → M5-01 → M5-02 → M5-03 → M5-04 → M6-01 → M6-02 → M6-03 → M6-04`. Task dependencies above, not this total order, are authoritative after review.
+**Default implementation sequence:** `M1-01 → M1-02 → M2-01 → M2-02 → M3-01 → M3-02 → M3-03 → M3-04 → M3-05 → M4-01 → M4-04 → M4-02 → M4-03 → M5-01 → M5-02 → M5-03 → M5-04 → M6-01 → M6-02 → M6-03 → M6-04`. Task dependencies above, not this total order, are authoritative after review.
 
 **Before authorizing M3–M6 tasks for Codex, decide contracts in this order:**
 
