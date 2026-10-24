@@ -20,6 +20,7 @@ Enforce authoritative authorization-expiry eligibility before a CAPTURE operatio
 
 ## Authoritative Sources
 
+- [M4 proposed implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**PROPOSED — review before implementation**)
 - [BR3](../requirement/BR-003-expired-authorizations.md)
 - [BR4](../requirement/BR-004-idempotent-capture-requests.md)
 - [STATES](../domain/payment-state-machines.md)
