@@ -20,6 +20,7 @@ Process an existing AUTHORIZE command with a simulated PSP and record verified f
 
 ## Authoritative Sources
 
+- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
 - [A11](../adr/0011-execute-payment-operation-command-envelope.md)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
