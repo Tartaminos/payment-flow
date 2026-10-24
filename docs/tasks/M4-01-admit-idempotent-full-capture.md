@@ -20,6 +20,7 @@ Admit one full capture operation through a replay-safe API without invoking the 
 
 ## Authoritative Sources
 
+- [M4 proposed implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**PROPOSED — review before implementation**)
 - [BR4](../requirement/BR-004-idempotent-capture-requests.md)
 - [BR8](../requirement/BR-008-block-conflicting-financial-operations.md)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
