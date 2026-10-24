@@ -1,12 +1,12 @@
 # PaymentFlow — Full M3–M6 Contract-Decision Review
 
 - **Date:** 2026-10-24
-- **Status:** **PROPOSED COMPLETE DESIGN PASS / PENDING USER APPROVAL**. The prior M1 and M2 contracts stay APPROVED; M3–M6 tasks stay PLANNED.
-- **Method:** Review the missing business/API/data/operational choices against all [21 tasks](proposed-complete-task-backlog.md), [ADRs](../adr/), [BRs/NFR](../requirement/) and the [earlier task audit](task-backlog-review.md). The four new contracts are the **proposed choices**; this page records completeness and safety boundaries. This is a documentation review, not an executable system validation.
+- **Status:** **DESIGN PASS APPROVED (2026-10-24)**. The user explicitly approved all four M3–M6 contracts and all 17 associated tasks for **Codex implementation after their predecessors are verified**. M1 and M2 approvals remain valid.
+- **Method:** Review the missing business/API/data/operational choices against all [21 tasks](proposed-complete-task-backlog.md), [ADRs](../adr/), [BRs/NFR](../requirement/) and the [earlier task audit](task-backlog-review.md). The four downstream contracts are **accepted implementation decisions**; this page records completeness and safety boundaries. This is a documentation review, not an executable system validation.
 
 ## Decision inventory by milestone
 
-| Stage / tasks | Contract chosen for review | Previously missing decisions now explicitly proposed |
+| Stage / tasks | Contract chosen for review | Previously missing decisions now approved |
 | --- | --- | --- |
 | **M3-01…05** | [M3 contract](../contracts/m3-payment-processor-contract.md) | Stateful PSP HTTP boundary and durable idempotency, source-of-truth mapping and evidence, GET Payment API/error shape, original financial attempt counting with 5/10/20s timeouts and 1/2s retry gaps, independent active UNKNOWN reconciliation, PROCESSING owner fencing, 4 partitions/1 consumer/4 workers, global=32/per-payment-wait=4/per-partition=8, poll max=16, manual contiguous offsets, crash/rebalance and poison blocking pending M5. |
 | **M4-01,04,02,03** | [M4 contract](../contracts/m4-capture-void-expiration-contract.md) | Exact full capture and void HTTP endpoints/header/body/202/409 contracts, per-action idempotency and stable PSP operation identity, authoritative active-vs-expired vs unknown PSP evidence, fail-closed capture admission, admission+worker expiry checks, capture/void transitions and minimal active CAPTURE/VOID UNKNOWN recovery before offset acknowledgment. Safe order M4-01 → M4-04 → M4-02 → M4-03. |
@@ -24,11 +24,11 @@
 
 ## Review observations / non-architectural execution choices
 
-- **Contract approval is still required.** The user requested that all decisions be prepared together, not to auto-run agents or silently change the existing M3–M6 task authorization.
+- **Approval recorded:** on 2026-10-24 the user accepted the four contracts and authorized the remaining 17 tasks in dependency order. This approval does not auto-run agents, merge pull requests, or attest to passing implementation tests.
 - **Architect freedom remains:** Java packages/classes, concrete repository SQL style, Maven module organization, worker library interfaces, dependency versions compatible with the approved runtimes, and specific code-level exception types are implementation-level design, **not missing financial/business contracts**. If implementation reveals a new material behavioral conflict, route it back for decision rather than inventing business semantics.
 - **Local-only trade-offs:** single broker replication factor 1, simulated PSP in isolated runtime/storage, localhost operational endpoints, no high-availability guarantee, no live financial credentials, no performance SLA, no PCI certification.
 - **Not guaranteed by planning alone:** no static documentation audit can prove real Kafka rebalance, PSP failure or 5-year retention behavior. Automated tests and independent Test Engineer evidence are still needed task by task.
 
 ## Gate recommendation
 
-**Approve or amend these four contracts as one package.** On explicit approval, change the four contracts and 17 task statuses to APPROVED **subject to upstream task dependencies**, and synchronize backlog/roadmap/README without invoking Codex. Until that approval, [M1](../contracts/m1-payment-creation-contract.md) and [M2](../contracts/m2-outbox-kafka-contract.md) alone remain approved for implementation. No implementation code was changed in this design pass.
+**Approved as one package on 2026-10-24.** All six contracts and 21 six-section task files now carry accepted implementation status **subject to upstream task dependencies, independent tests and specialist gates**. The safe order starts at [M1-01](../tasks/M1-01-transactional-payment-acceptance.md); no Codex run or implementation code change occurred as part of the approval documentation.
