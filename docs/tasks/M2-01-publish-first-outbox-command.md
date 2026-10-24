@@ -1,6 +1,6 @@
 # M2-01 — First Outbox Command Published
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24), **after M1-02 is complete and verified**. Execute through the locally configured Codex orchestration skill; approval does not launch Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Publish a previously committed `ExecutePaymentOperation` Outbox intent to Kafka 
 
 ## Authoritative Sources
 
-- [M2 proposed implementation contract](../contracts/m2-outbox-kafka-contract.md) (**DRAFT — not approved**)
+- [M2 approved implementation contract](../contracts/m2-outbox-kafka-contract.md) (**APPROVED**)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
 - [A11](../adr/0011-execute-payment-operation-command-envelope.md)
@@ -42,4 +42,4 @@ Publish a previously committed `ExecutePaymentOperation` Outbox intent to Kafka 
 ## Dependencies
 
 - [M1-02](M1-02-idempotent-replay-and-concurrent-requests.md)
-- M2 contract approval: Kafka/Schema Registry runtime, topic/retention, record namespace/name, payload `paymentId` choice, serialization and registry wire identity.
+- [Approved M2 transport and wire contract](../contracts/m2-outbox-kafka-contract.md): local Kafka/Schema Registry, topic/retention, record name, key-only `paymentId`, serialization and registry identity.
