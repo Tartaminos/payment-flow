@@ -1,7 +1,7 @@
 # M4 — Capture, Void and Authoritative Authorization Expiry Contract
 
-- **Status:** **PROPOSED — pending explicit user approval** (2026-10-24); M4-01/M4-04/M4-02/M4-03 remain PLANNED and non-executable.
-- **Authority:** [M3 contract proposal](m3-payment-processor-contract.md), [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../requirement/BR-004-idempotent-capture-requests.md), [BR-008](../requirement/BR-008-block-conflicting-financial-operations.md), [state machines](../domain/payment-state-machines.md), [M1 API conventions](m1-payment-creation-contract.md), [ADR-0010](../adr/0010-generic-execute-payment-operation-command.md).
+- **Status:** **APPROVED for M4 implementation** (2026-10-24). The user explicitly accepted this contract and all four M4 tasks. Execute only after M3 dependencies and in safe order M4-01 → M4-04 → M4-02 → M4-03.
+- **Authority:** [approved M3 contract](m3-payment-processor-contract.md), [BR-003](../requirement/BR-003-expired-authorizations.md), [BR-004](../requirement/BR-004-idempotent-capture-requests.md), [BR-008](../requirement/BR-008-block-conflicting-financial-operations.md), [state machines](../domain/payment-state-machines.md), [M1 API conventions](m1-payment-creation-contract.md), [ADR-0010](../adr/0010-generic-execute-payment-operation-command.md).
 
 ## API admission (M4-01 / M4-03)
 
@@ -39,6 +39,6 @@
 
 - Transactional/admission locks or conditional updates must protect Payment and conflicting PaymentOperation eligibility. Stale workers cannot overwrite successful captured/voided/expired outcomes. Every state transition and audit event commit together.
 - Verify: same-key equivalent/conflicting capture/void, different-key after CAPTURED, simultaneous capture-vs-capture, capture-vs-void, capture-vs-expiry, active/expired/unavailable PSP validity, duplicate Kafka delivery, lost-response UNKNOWN and reconciliation using original ID. No simulated cardholder secrets.
-- **Proposed task sequence:** [M4-01](../tasks/M4-01-admit-idempotent-full-capture.md) → [M4-04](../tasks/M4-04-guard-expired-authorizations.md) → [M4-02](../tasks/M4-02-execute-full-capture.md) → [M4-03](../tasks/M4-03-void-authorized-payment.md). M4-01 is **not** production-complete without M4-04 and M4-02, but it must fail closed on unverified validity from day one.
+- **Approved task sequence:** [M4-01](../tasks/M4-01-admit-idempotent-full-capture.md) → [M4-04](../tasks/M4-04-guard-expired-authorizations.md) → [M4-02](../tasks/M4-02-execute-full-capture.md) → [M4-03](../tasks/M4-03-void-authorized-payment.md). M4-01 is **not** production-complete without M4-04 and M4-02, but it must fail closed on unverified validity from day one.
 
-**Approval gate:** This contract and the four slices remain proposals until the user approves exact endpoint/error/PSP expiry semantics. No code execution is authorized by publication.
+**Approval recorded 2026-10-24:** the HTTP endpoints, idempotency, PSP evidence and expiry/capture/void behavior and task order are approved. Implementation may be initiated deliberately through Codex only after earlier dependencies; no code is executed by the documentation commit.
