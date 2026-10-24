@@ -1,7 +1,8 @@
 # PaymentFlow — Complete Vertical-Slice Task Backlog
 
 - **Status:** **21-task vertical-slice breakdown APPROVED (2026-10-24)**. Only **M1-01/M1-02** are approved for **Codex implementation**; all **19 M2–M6 tasks are PLANNED / implementation-blocked** pending their milestone scope and contracts.
-- **Scope:** Proposed implementation plan for the [existing six-milestone roadmap](../roadmap.md), not a change to the accepted ADRs.
+- **Scope:** Approved task decomposition against the [six-milestone roadmap](../roadmap.md), **not** an approval of M2–M6 milestone internals or contracts.
+- **Review:** [Full 21-task consistency review](task-backlog-review.md) — six-section structure, links, dependency graph and cross-milestone risk gates.
 - **Task policy:** One short, independently demonstrable vertical slice per Markdown file under `docs/tasks/`, with **Objective, Required Behavior, Scope Lock, Authoritative Sources, Acceptance Criteria, Dependencies**. The Architect determines internal Java design.
 - **All 21 Markdown task files exist** under `docs/tasks/`. M2–M6 files are approved **as backlog decomposition only**; do **not** execute them through Codex until the respective milestone and missing contracts are explicitly accepted. This page is the planning index, not an implementation authorization.
 
