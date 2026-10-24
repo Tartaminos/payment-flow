@@ -1,6 +1,7 @@
 # PaymentFlow — Review of the 21-task Vertical-Slice Backlog
 
 - **Review date:** 2026-10-24
+- **Status update (2026-10-24, after this review):** The user explicitly **approved [M2 transport/Publisher contract](../contracts/m2-outbox-kafka-contract.md), [M2-01](../tasks/M2-01-publish-first-outbox-command.md) and [M2-02](../tasks/M2-02-recover-outbox-publication.md)** for implementation **after verified completion of M1**. **M1 + M2 = 4 approved tasks; M3–M6 = 17 PLANNED tasks**. The audit statements below about M2 being blocked describe the earlier pre-approval snapshot; they have been superseded by the linked approved contract. No implementation code, broker startup or Codex run has been performed in this approval update.
 - **Scope:** Static review of the [full task backlog](proposed-complete-task-backlog.md), all 21 Markdown files in [`docs/tasks/`](../tasks/), [roadmap](../roadmap.md), relevant accepted requirements, domain model and ADRs.
 - **Result:** **PASS for backlog documentation and approved task division; NOT an implementation or integration-test sign-off.** The two M1 tasks are independently approved for Codex implementation. The 19 tasks in M2–M6 are planned **but blocked on their milestone contracts/approval**.
 
