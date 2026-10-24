@@ -8,7 +8,7 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 ## Required Behavior
 
-- Consume the existing CAPTURE command, revalidate authorized/eligible Payment state against PostgreSQL and call the fake PSP under the same stable operation identity.
+- Consume the existing CAPTURE command, revalidate authorized/eligible Payment state against PostgreSQL and call the fake PSP under the same stable operation identity. **Do not process capture when expiration validity is unresolved**; M4 sign-off requires the authoritative expiry guard in M4-04.
 - Only a confirmed full PSP capture transitions Payment to `CAPTURED` and CAPTURE operation to `SUCCEEDED`; update audit in the same transaction.
 - Duplicate or out-of-order records never cause a second charge; ambiguous outcomes remain UNKNOWN and cannot be recorded as success.
 
