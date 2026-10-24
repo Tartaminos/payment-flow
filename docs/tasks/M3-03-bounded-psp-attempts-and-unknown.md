@@ -20,6 +20,7 @@ Apply safe, bounded PSP attempts while preserving ambiguous financial results.
 
 ## Authoritative Sources
 
+- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR6](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
 - [BR7](../requirement/BR-007-bounded-psp-retries.md)
