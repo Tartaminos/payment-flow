@@ -72,6 +72,8 @@ The command identifies **which existing financial operation may be considered fo
 
 ## Open decisions
 
+**Subsequent M2 implementation contract (approved 2026-10-24):** the [M2 contract](../contracts/m2-outbox-kafka-contract.md) explicitly keeps `paymentId` **only in the mandatory Kafka key**, not as a duplicate Avro value field. The Avro command retains `operationId` and the accepted envelope. The exact M2 Avro namespace/name and Registry wire identity are also specified there. Questions below reflect the original ADR stage; optional diagnostic headers and later retry/DLQ formats are not thereby approved.
+
 - **[ADR-0018](0018-payment-id-as-kafka-command-partition-key.md) selects `paymentId` as the Kafka command key.** **[ADR-0019](0019-canonical-utf8-uuid-kafka-command-key.md) subsequently chooses canonical UUID text in UTF-8**, not Avro, for key bytes. Partitioner/count/operational changes and whether to duplicate `paymentId` in the Avro value remain open.
 - Final Avro record name/namespace, physical schema definition and validation.
 - The actual optional Kafka headers, naming/encoding and propagation rules (including tracing), plus duplicate-field mismatch treatment.
