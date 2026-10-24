@@ -26,6 +26,10 @@ This policy approves the **format**, not the M1 decomposition. Both M1 tasks and
 
 The [21-task backlog index](planning/proposed-complete-task-backlog.md) links all **21 six-section Markdown task files** under `docs/tasks/`. The user **approved the division** on 2026-10-24: **M1-01/M1-02 remain APPROVED for implementation**; all **19 M2–M6 files are PLANNED and not Codex-authorized** until their respective scope and contracts are approved. No runtime work is implied by task-file creation. See the [task review report](planning/task-backlog-review.md) for consistency checks and future contract gates.
 
+## Proposed M2 contract — review required
+
+The [M2 Outbox/Kafka/Avro transport contract](contracts/m2-outbox-kafka-contract.md) is **DRAFT**. It proposes a local KRaft broker + Schema Registry, a 4-partition 7-day main topic, concrete Avro record and key, and at-least-once lease/ack-based publisher recovery. **M2-01 and M2-02 remain PLANNED, not authorized for Codex implementation** until the user approves this contract and M2 scope.
+
 ## Milestones
 
 | ID | Delivery | Status | Minimal demonstrable outcome |
