@@ -1,7 +1,7 @@
 # BR-001 — Idempotent payment requests
 
 - **Type:** Business rule
-- **Status:** Agreed at the behavioral level; implementation details pending
+- **Status:** Business behavior agreed; **M1 creation implementation contract approved** on 2026-10-24 in [M1 contract](../contracts/m1-payment-creation-contract.md).
 - **Scope:** Creation of a payment through the PaymentFlow API
 - **Related:** [BR-002 — Uncertain PSP outcomes](BR-002-uncertain-psp-outcomes.md)
 
@@ -18,7 +18,7 @@ An e-commerce client may retry a payment request because its connection timed ou
 1. A client initiates `POST /payments` with an `Idempotency-Key` and payment parameters.
 2. PaymentFlow associates the key and request identity with **one** logical payment.
 3. Repeating an equivalent request using that same key returns the already-known payment identity and its current outcome (including a pending/in-progress outcome when applicable), rather than creating another payment.
-4. Reusing the same key **within the same scope** with different payment parameters is a conflict; reject it (proposed HTTP status: `409 Conflict`).
+4. Reusing the same key **within the same scope** with different payment parameters is a conflict; reject it (M1 accepted HTTP status: `409 Conflict`).
 5. Concurrent requests carrying the same key must not both create payments or each start independent downstream financial operations.
 
 ## Example
@@ -51,13 +51,8 @@ The amount is expressed in the currency's minor unit here: `50000` means BRL 500
 
 ## Boundaries and open design decisions
 
-**Established:** An `Idempotency-Key` is required in the proposed creation flow to correlate repeated requests.
+**Established for M1:** [M1 contract](../contracts/m1-payment-creation-contract.md) approves a required `Idempotency-Key`, unique `(merchant_id, operation_scope=PAYMENT_CREATE, key)` scope, canonical SHA-256 of validated `orderId`, integer `amount` and uppercase `currency`, `202` replay of the original identity, `409` for changed parameters, PostgreSQL-backed concurrent first-request safety, and no automatic key expiry or purge in this local milestone.
 
-**To decide during API/data design:**
-- Key uniqueness scope (for example, merchant + operation + key).
-- Definition and canonicalization of *equivalent business parameters*.
-- Key retention/expiry policy and the behavior after expiration.
-- Exact HTTP status and response shape for a concurrent in-progress request.
-- Database uniqueness constraints, transaction strategy, and request ownership/locking mechanism.
+**Not decided for future milestones:** a safe expiry/purge and replay-after-expiry policy, merchant authentication/multi-tenancy, provider-side financial idempotency, and any capture-specific refinements. Implementation placement/locking mechanics remain owned by the Architect while preserving the approved uniqueness and race semantics.
 
 **Important:** API-level idempotency is not sufficient by itself to prevent a PSP from executing an external charge twice. See [BR-002](BR-002-uncertain-psp-outcomes.md).
