@@ -20,6 +20,7 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 ## Authoritative Sources
 
+- [M4 proposed implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**PROPOSED — review before implementation**)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [BR4](../requirement/BR-004-idempotent-capture-requests.md)
