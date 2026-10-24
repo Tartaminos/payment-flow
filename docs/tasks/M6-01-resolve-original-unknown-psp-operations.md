@@ -20,6 +20,7 @@ Safely reconcile an existing `UNKNOWN` financial operation using authoritative P
 
 ## Authoritative Sources
 
+- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR6](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
 - [BR7](../requirement/BR-007-bounded-psp-retries.md)
