@@ -1,6 +1,6 @@
 # M6-04 — End-to-End Failure Recovery
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the local Codex orchestration skill **only after dependencies are complete and independently verified**; this approval neither launches Codex nor claims production compliance.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Demonstrate that PaymentFlow recovers safely from realistic failures across the 
 
 ## Authoritative Sources
 
-- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
+- [M6 approved implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**APPROVED**)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR5](../requirement/BR-005-reconciliation-after-24h-unknown.md)
 - [BR6](../requirement/BR-006-distinguish-technical-failure-from-decline.md)
@@ -43,4 +43,4 @@ Demonstrate that PaymentFlow recovers safely from realistic failures across the 
 - [M6-01](M6-01-resolve-original-unknown-psp-operations.md)
 - [M6-02](M6-02-escalate-unknown-after-24h.md)
 - [M6-03](M6-03-traceability-and-retention.md)
-- M6 contract approval: test environment/fault-injection matrix and acceptable terminal or visible-UNKNOWN outcomes.
+- Approved [M6 implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md): test environment/fault-injection matrix and acceptable terminal or visible-UNKNOWN outcomes.
