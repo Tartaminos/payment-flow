@@ -17,7 +17,7 @@ PaymentFlow is an educational local MVP with no authentication/merchant registry
 
 1. The API resolves merchant identity from the locally configured value for all requests in the first increment, rather than trusting unverified client claims.
 2. Persist this `merchant_id` in `Payment` and the scoped client-idempotency association, preserving the approved database shape and `(merchant_id, operation_scope, key)` uniqueness design. **Do not collapse the database uniqueness contract to key alone** merely because one merchant is configured now.
-3. Merchant identity must remain **stable across restarts** and not be randomly generated per request or per process start. The specific example UUID and configuration property name are implementation details to specify before Codex coding.
+3. Merchant identity must remain **stable across restarts** and not be randomly generated per request or per process start. For M1, the approved [implementation contract](../contracts/m1-payment-creation-contract.md) selects property `paymentflow.merchant-id` and stable synthetic UUID `550e8400-e29b-41d4-a716-446655440000`; startup fails clearly if configuration is absent or malformed.
 4. No merchant-management table, merchant-switching endpoint, authentication/authorization layer or dynamic merchant selection is added to M1.
 5. This is explicitly a local **single-tenant teaching shortcut**, not a production authorization model. If multi-merchant support is introduced later, identity should be derived from trusted authentication context and documented in a new decision.
 
@@ -28,7 +28,7 @@ PaymentFlow is an educational local MVP with no authentication/merchant registry
 
 ## Open implementation details
 
-Configuration property name, synthetic UUID to use in local setup, error behavior if it is missing or malformed, exact request/response payload and remaining idempotency/physical storage choices.
+**Approved subsequently for M1:** [M1 contract](../contracts/m1-payment-creation-contract.md) specifies the merchant property and UUID, startup validation, `POST /payments` request/response, scoped idempotency and five-record transactional persistence. Future multi-merchant authenticated identity and production configuration remain outside M1.
 
 ## Documentation-only boundary
 
