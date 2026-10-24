@@ -1,11 +1,11 @@
 # PaymentFlow — Implementation Roadmap
 
-- **Status:** Roadmap established; M1 scope approved; M2–M6 are proposals for later approval.
+- **Status:** Roadmap established; M1 approved for Codex implementation; M2–M6 remain proposed.
 - **Date:** 2026-10-24
 - **Source of truth:** This file, the [M1 specification](milestones/m1-payment-creation-idempotency.md), [business requirements](requirement/), [domain](domain/) and [accepted ADRs](adr/).
 - **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts, acceptance criteria **and task-brief structure** are approved and committed. No downstream design gap authorizes inventing financial business rules.
 - **Approved task-granularity rule (2026-10-24):** implementation tasks must be **vertical slices** organized around one independently verifiable behavior/capability, spanning any necessary controller/domain/persistence/test changes. Do not split tasks by horizontal layers (controllers/services/repositories), create arbitrary class-by-class tasks, or bundle an entire milestone into one overly broad task.
-- **Approved task source and location (2026-10-24):** each vertical slice gets **one short Markdown file under `docs/tasks/`**, versioned on GitHub and selected as input to the Codex orchestration skill. The **six-section template is approved**. [Two M1 slices](milestones/m1-payment-creation-idempotency.md) have now been created as **DRAFTS**, awaiting user review of their split and [detailed contract](contracts/m1-payment-creation-contract.md).
+- **Approved task source and location (2026-10-24):** each vertical slice gets **one short Markdown file under `docs/tasks/`**, versioned on GitHub and selected as input to the Codex orchestration skill. The **six-section template is approved**. [Two M1 slices](milestones/m1-payment-creation-idempotency.md) have now been created as **APPROVED**, together with the [detailed contract](contracts/m1-payment-creation-contract.md).
 
 ## Approved concise task format (2026-10-24)
 
@@ -20,13 +20,13 @@ Every task in `docs/tasks/` is a **small vertical slice**, written in concise Ma
 
 Prefer pointers over repeated documentation. Do **not** prescribe class/controller/service/repository layouts: the orchestration skill's Architect owns architectural placement, the Coder implements, and the Test Engineer provides independent automated evidence. The task defines *what* must be true, not a technical recipe.
 
-This policy approves the **format**, not the M1 decomposition. Two **draft** task files and one **proposed** M1 implementation contract were subsequently created at the user's request; their publication does **not** mean that the new business/API/data decisions have been accepted or that Codex may start.
+This policy approves the **format**, not the M1 decomposition. Both M1 tasks and the implementation contract were approved on 2026-10-24 and are ready for user-initiated Codex execution.
 
 ## Milestones
 
 | ID | Delivery | Status | Minimal demonstrable outcome |
 | --- | --- | --- | --- |
-| **M1** | **Payment Creation & Idempotency** | **Scope approved** | POST /payments persists Payment, initial AUTHORIZE PaymentOperation, idempotency association, audit and an Outbox publication intent in one transaction; returns durable acceptance, with tests. **No Kafka/PSP integration.** |
+| **M1** | **Payment Creation & Idempotency** | **APPROVED for Codex** | POST /payments persists Payment, initial AUTHORIZE PaymentOperation, idempotency association, audit and an Outbox publication intent in one transaction; returns durable acceptance, with tests. **No Kafka/PSP integration.** |
 | **M2** | Outbox Publisher & Kafka Transport | Proposed | Committed Outbox intents are published at least once to the main Kafka command topic with agreed paymentId key and Avro/Schema Registry value. |
 | **M3** | Payment Processor & Simulated Authorization | Proposed | One consumer decodes commands; bounded workers check DB state, call a fake PSP for AUTHORIZE, store definitive/unknown results and commit safe offsets. |
 | **M4** | Capture, Void & Domain Invariants | Proposed | Admitted capture/cancel operations respect authorization, expiry, single-full-capture and conflicting-operation rules. |
@@ -35,27 +35,27 @@ This policy approves the **format**, not the M1 decomposition. Two **draft** tas
 
 This sequence is a **planning proposal**, not approval of the exact internals or endpoints of M2–M6. PSP webhooks, advanced operational tooling and any ledger remain separate scope choices, not implicit commitments.
 
-## M1 proposed execution slices (review required)
+## M1 approved execution slices
 
-- **[M1-01 — Transactional Payment Acceptance](tasks/M1-01-transactional-payment-acceptance.md)**: new POST /payments creates all five durable records atomically. **Draft; not executable yet.**
-- **[M1-02 — Idempotent Payment Replay and Concurrency](tasks/M1-02-idempotent-replay-and-concurrent-requests.md)**: the same endpoint handles equivalent replay, conflicting keys and concurrent first requests, with PostgreSQL-backed evidence. Depends on M1-01. **Draft; not executable yet.**
-- **[M1 proposed HTTP, idempotency and persistence contract](contracts/m1-payment-creation-contract.md)**: candidate exact 202/400/409 responses, canonical hash, no-expiry local policy, five-record physical persistence and pending Outbox; **not approved yet**.
+- **[M1-01 — Transactional Payment Acceptance](tasks/M1-01-transactional-payment-acceptance.md)**: new POST /payments creates all five durable records atomically. **Approved for sequential implementation.**
+- **[M1-02 — Idempotent Payment Replay and Concurrency](tasks/M1-02-idempotent-replay-and-concurrent-requests.md)**: the same endpoint handles equivalent replay, conflicting keys and concurrent first requests, with PostgreSQL-backed evidence. Depends on M1-01. **Approved for sequential implementation.**
+- **[M1 accepted HTTP, idempotency and persistence contract](contracts/m1-payment-creation-contract.md)**: accepted 202/400/409 responses, canonical SHA-256, no-expiry M1 policy, Outbox persistence and Testcontainers tests.
 
 ## Approved M1 boundaries
 
-The user explicitly approved **API + PostgreSQL + transactional Outbox + audit + automated tests, without Kafka in the first increment**. Its precise implementation requirements and open pre-coding contracts are tracked in [M1](milestones/m1-payment-creation-idempotency.md).
+The user explicitly approved **API + PostgreSQL + transactional Outbox + audit + automated tests, without Kafka in the first increment**. The approved implementation contract and tasks are tracked in [M1](milestones/m1-payment-creation-idempotency.md).
 
 The API accepts requests durably; it does **not** report financial authorization/capture success before PSP processing exists. The Outbox is **persisted but not published** in M1.
 
 **Initializr dependency decision (2026-10-24):** include **Spring for Apache Kafka** and **HTTP Client** in the starter generated by the user from the beginning. Milestone boundaries govern behavior/runtime integration, not whether future libraries already exist in the build. M1 must work without running Kafka and must not perform PSP requests. This approves only those two dependencies; no other proposed starter selections are implicitly accepted.
 
-**Additional agreed implementation context:** one stable synthetic merchant from application configuration ([ADR-0023](adr/0023-configured-single-merchant-for-educational-mvp.md)); the user will bootstrap the project through **Spring Initializr**. For subsequent Codex work, the intended tool is the **orchestration skill in the `remove-agents-from-flow` branch of the `Tartaminos/agent_benchmark` repository**. The repository, branch and skill path were verified through the connected GitHub repository: [`software-development-workflow/SKILL.md`](https://github.com/Tartaminos/agent_benchmark/blob/remove-agents-from-flow/.agents/skills/software-development-workflow/SKILL.md). The skill requires Scope Lock, specialist gates and independent automated tests; commits and PRs require explicit authorization. The user confirms the Codex skill and its agents are already configured **locally** for use in the PaymentFlow project; the GitHub agent repository is a mirror. No additional skill setup task is needed. Vertical-slice task granularity and `docs/tasks/*.md` storage are now approved. The task structure is now approved: **Objective, Required Behavior, Scope Lock, Authoritative Sources, Acceptance Criteria and Dependencies**. Keep the file concise; refer to source docs instead of repeating ADRs and let the skill's Architect choose technical implementation details. The **M1 slice breakdown and still-open API/data contracts remain to be decided before creating actual tasks**.
+**Additional agreed implementation context:** one stable synthetic merchant from application configuration ([ADR-0023](adr/0023-configured-single-merchant-for-educational-mvp.md)); the user will bootstrap the project through **Spring Initializr**. For subsequent Codex work, the intended tool is the **orchestration skill in the `remove-agents-from-flow` branch of the `Tartaminos/agent_benchmark` repository**. The repository, branch and skill path were verified through the connected GitHub repository: [`software-development-workflow/SKILL.md`](https://github.com/Tartaminos/agent_benchmark/blob/remove-agents-from-flow/.agents/skills/software-development-workflow/SKILL.md). The skill requires Scope Lock, specialist gates and independent automated tests; commits and PRs require explicit authorization. The user confirms the Codex skill and its agents are already configured **locally** for use in the PaymentFlow project; the GitHub agent repository is a mirror. No additional skill setup task is needed. Vertical-slice task granularity and `docs/tasks/*.md` storage are now approved. The task structure is now approved: **Objective, Required Behavior, Scope Lock, Authoritative Sources, Acceptance Criteria and Dependencies**. Keep the file concise; refer to source docs instead of repeating ADRs and let the skill's Architect choose technical implementation details. The **M1 slice breakdown and API/data contract are approved**.
 
 ## Suggested delivery rhythm
 
 1. Agree on a milestone's scope.
 2. Close only the contracts required for that milestone in GitHub (ADRs/specs where needed).
-3. **Use the approved concise six-section Markdown template** below for each vertical slice, linking rather than reproducing applicable requirements and ADRs. The [proposed M1 contract](contracts/m1-payment-creation-contract.md) and **two draft tasks** are now on GitHub for review. Before Codex execution, obtain explicit approval of the new contract details and task breakdown, then update their statuses.
+3. **Use the approved concise six-section Markdown template** below for each vertical slice, linking rather than reproducing applicable requirements and ADRs. The [approved M1 contract](contracts/m1-payment-creation-contract.md) and **two approved vertical-slice tasks** are committed. Execute with the local orchestration skill, one slice at a time.
 4. The user initializes the baseline via Spring Initializr; Codex implements approved small tasks through the selected orchestration workflow. Run tests and review contributions against the GitHub source-of-truth docs.
 5. Update documentation for explicitly approved changes; move to the next milestone after verification.
 
