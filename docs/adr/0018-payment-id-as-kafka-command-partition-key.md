@@ -62,6 +62,8 @@ The key `paymentId` answers **which payment should share Kafka partition affinit
 
 ## Not yet approved
 
+**Subsequent M2 implementation contract (approved 2026-10-24):** the [M2 contract](../contracts/m2-outbox-kafka-contract.md) settles the initial main topic, four partitions and `paymentId` as **Kafka key only** (not included in the Avro value) for the `ExecutePaymentOperation` command. The originally open items below remain historical except where resolved for M2; retry-topic specialized records and broader scaling decisions remain deferred.
+
 - Exact Kafka topic names, consumer-group identity, other topics' partitions and partition expansion/operational procedures. **[ADR-0020](0020-bounded-async-payment-processing-with-per-payment-exclusion.md) establishes the bounded asynchronous model and [ADR-0021](0021-small-mvp-kafka-partition-and-worker-topology.md) sets the starting main-topic/processor sizing to 4 partitions, 1 consumer instance and 4 workers.**
 - **[ADR-0019](0019-canonical-utf8-uuid-kafka-command-key.md) approves canonical lowercase UUID text encoded with UTF-8** for the key, not Avro. Exact serializer/configuration, topic partitioner and partition count remain open. `RecordNameStrategy` continues to govern **Avro value** subjects.
 - Whether `paymentId` also appears in the Avro value. `operationId` remains the required authoritative operation lookup field.
