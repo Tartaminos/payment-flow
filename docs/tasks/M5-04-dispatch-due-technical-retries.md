@@ -1,6 +1,6 @@
 # M5-04 — Dispatch Due Technical Retries
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the local Codex orchestration skill **after the preceding dependency tasks are complete and independently verified**; a partial retry pipeline is not production/recovery complete. Approval alone does not run Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Redispatch eligible technical retry schedules through a crash-safe durable hando
 
 ## Authoritative Sources
 
-- [M5 proposed implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**PROPOSED — review before implementation**)
+- [M5 approved implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**APPROVED**)
 - [A8](../adr/0008-persistent-kafka-retry-scheduler.md)
 - [A9](../adr/0009-exponential-backoff-with-jitter-for-kafka-retries.md)
 - [A7](../adr/0007-single-kafka-retry-topic-and-dlq.md)
@@ -37,4 +37,4 @@ Redispatch eligible technical retry schedules through a crash-safe durable hando
 ## Dependencies
 
 - [M5-03](M5-03-persist-technical-retry-schedules.md)
-- M5 contract approval: schedule ownership/claiming, dispatcher publication identity, durable handoff and cleanup policy.
+- Approved [M5 implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md): schedule ownership/claiming, dispatcher publication identity, durable handoff and cleanup policy.
