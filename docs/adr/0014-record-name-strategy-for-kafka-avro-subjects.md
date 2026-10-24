@@ -80,6 +80,8 @@ The diagram shows logical relationships, not a final choice to serialize the ret
 
 ## Explicitly open
 
+**Subsequent M2 implementation contract (approved 2026-10-24):** the [M2 contract](../contracts/m2-outbox-kafka-contract.md) finalizes command record/subject `com.paymentflow.commands.ExecutePaymentOperation`, `FULL_TRANSITIVE`, mandatory Kafka `paymentId` key only, and the main topic `payment.operations.requested.v1`. The older open questions below are historical to this ADR; retry wrappers and M5 topic formats are still open.
+
 - **Field representations were accepted in [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md):** UUID logical types, `timestamp-millis`, nullable `causationId` with a default of `null`, and no artificial defaults for required fields. Final namespace/record name and physical `.avsc` contract are still open.
 - Registry implementation/provider, subject naming governance across environments, authorization/credentials and registration procedures.
 - **[ADR-0016](0016-remove-redundant-command-schema-version.md) removes `schemaVersion` from the command.** Exact Schema Registry schema-ID resolution and retention remain to be designed.
