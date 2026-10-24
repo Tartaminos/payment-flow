@@ -4,6 +4,7 @@
 - **Date:** 2026-10-24
 - **Source of truth:** This file, the [M1 specification](milestones/m1-payment-creation-idempotency.md), [business requirements](requirement/), [domain](domain/) and [accepted ADRs](adr/).
 - **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts, acceptance criteria **and task-brief structure** are approved and committed. No downstream design gap authorizes inventing financial business rules.
+- **Approved task-granularity rule (2026-10-24):** implementation tasks must be **vertical slices** organized around one independently verifiable behavior/capability, spanning any necessary controller/domain/persistence/test changes. Do not split tasks by horizontal layers (controllers/services/repositories), create arbitrary class-by-class tasks, or bundle an entire milestone into one overly broad task. This is a task-design decision, **not permission to create tasks yet**.
 
 ## Milestones
 
@@ -33,6 +34,8 @@ The API accepts requests durably; it does **not** report financial authorization
 3. **Before creating tasks or briefs**, inspect the selected orchestration skill, propose the task structure/storage, and obtain explicit user approval of that format. Only then prepare and commit Codex-ready tasks with testable acceptance criteria and exclusions.
 4. The user initializes the baseline via Spring Initializr; Codex implements approved small tasks through the selected orchestration workflow. Run tests and review contributions against the GitHub source-of-truth docs.
 5. Update documentation for explicitly approved changes; move to the next milestone after verification.
+
+**Bootstrap and containerization:** the user will generate the Spring Boot starter through Spring Initializr. **Docker Compose Support is being considered/recommended for local PostgreSQL**; full application image/Compose runtime, stage and acceptance criteria are **not yet approved**. Selecting Spring Boot's development-time Docker Compose integration does not itself dockerize the Java application.
 
 **Avoid speculative scaling:** local educational MVP, no production traffic target. When Kafka workers are implemented, the approved initial main-topic baseline is 4 partitions / 1 consumer instance / 4 async workers (ADR-0021). Backpressure queue sizes and detailed recovery are intentionally deferred until relevant.
 
