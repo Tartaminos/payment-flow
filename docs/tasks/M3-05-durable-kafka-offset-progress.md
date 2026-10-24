@@ -1,6 +1,6 @@
 # M3-05 — Durable Manual Offset Progress
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Run via the configured local Codex orchestration skill **only after prerequisite tasks are complete and independently verified**; documentation approval does not execute Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Make consumer-group progress reflect only contiguous durably processed or indepe
 
 ## Authoritative Sources
 
-- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
+- [M3 approved implementation contract](../contracts/m3-payment-processor-contract.md) (**APPROVED**)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [A20](../adr/0020-bounded-async-payment-processing-with-per-payment-exclusion.md)
 - [A21](../adr/0021-small-mvp-kafka-partition-and-worker-topology.md)
@@ -36,4 +36,4 @@ Make consumer-group progress reflect only contiguous durably processed or indepe
 ## Dependencies
 
 - [M3-04](M3-04-bounded-payment-workers.md)
-- M3 contract approval: offset ownership, rebalance/resume semantics and when an UNKNOWN recovery obligation is independent.
+- Approved [M3 implementation contract](../contracts/m3-payment-processor-contract.md): offset ownership, rebalance/resume semantics and when an UNKNOWN recovery obligation is independent.
