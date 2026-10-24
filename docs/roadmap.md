@@ -5,7 +5,7 @@
 - **Source of truth:** This file, the [M1 specification](milestones/m1-payment-creation-idempotency.md), [business requirements](requirement/), [domain](domain/) and [accepted ADRs](adr/).
 - **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts, acceptance criteria **and task-brief structure** are approved and committed. No downstream design gap authorizes inventing financial business rules.
 - **Approved task-granularity rule (2026-10-24):** implementation tasks must be **vertical slices** organized around one independently verifiable behavior/capability, spanning any necessary controller/domain/persistence/test changes. Do not split tasks by horizontal layers (controllers/services/repositories), create arbitrary class-by-class tasks, or bundle an entire milestone into one overly broad task.
-- **Approved task source and location (2026-10-24):** each approved vertical slice gets **one short Markdown file under `docs/tasks/`**, versioned on GitHub and selected as input to the Codex orchestration skill. The **six-section template is now approved**, but no M1 task breakdown or task files have yet been approved/created.
+- **Approved task source and location (2026-10-24):** each vertical slice gets **one short Markdown file under `docs/tasks/`**, versioned on GitHub and selected as input to the Codex orchestration skill. The **six-section template is approved**. [Two M1 slices](milestones/m1-payment-creation-idempotency.md) have now been created as **DRAFTS**, awaiting user review of their split and [detailed contract](contracts/m1-payment-creation-contract.md).
 
 ## Approved concise task format (2026-10-24)
 
@@ -20,7 +20,7 @@ Every task in `docs/tasks/` is a **small vertical slice**, written in concise Ma
 
 Prefer pointers over repeated documentation. Do **not** prescribe class/controller/service/repository layouts: the orchestration skill's Architect owns architectural placement, the Coder implements, and the Test Engineer provides independent automated evidence. The task defines *what* must be true, not a technical recipe.
 
-This policy **does not approve the M1 task decomposition** and does not create task files.
+This policy approves the **format**, not the M1 decomposition. Two **draft** task files and one **proposed** M1 implementation contract were subsequently created at the user's request; their publication does **not** mean that the new business/API/data decisions have been accepted or that Codex may start.
 
 ## Milestones
 
@@ -34,6 +34,12 @@ This policy **does not approve the M1 task decomposition** and does not create t
 | **M6** | PSP Uncertainty, Reconciliation & Observability | Proposed | Ambiguous outcomes are independently reconciled/escalated, and tests/diagnostics exercise failure recovery and tracing. |
 
 This sequence is a **planning proposal**, not approval of the exact internals or endpoints of M2–M6. PSP webhooks, advanced operational tooling and any ledger remain separate scope choices, not implicit commitments.
+
+## M1 proposed execution slices (review required)
+
+- **[M1-01 — Transactional Payment Acceptance](tasks/M1-01-transactional-payment-acceptance.md)**: new POST /payments creates all five durable records atomically. **Draft; not executable yet.**
+- **[M1-02 — Idempotent Payment Replay and Concurrency](tasks/M1-02-idempotent-replay-and-concurrent-requests.md)**: the same endpoint handles equivalent replay, conflicting keys and concurrent first requests, with PostgreSQL-backed evidence. Depends on M1-01. **Draft; not executable yet.**
+- **[M1 proposed HTTP, idempotency and persistence contract](contracts/m1-payment-creation-contract.md)**: candidate exact 202/400/409 responses, canonical hash, no-expiry local policy, five-record physical persistence and pending Outbox; **not approved yet**.
 
 ## Approved M1 boundaries
 
@@ -49,7 +55,7 @@ The API accepts requests durably; it does **not** report financial authorization
 
 1. Agree on a milestone's scope.
 2. Close only the contracts required for that milestone in GitHub (ADRs/specs where needed).
-3. **Use the approved concise six-section Markdown template** below for each vertical slice, linking rather than reproducing applicable requirements and ADRs. Before writing the actual task files, agree on the M1 slice breakdown and close each slice's necessary business/API/data contracts. Commit only approved task specifications with verifiable acceptance criteria.
+3. **Use the approved concise six-section Markdown template** below for each vertical slice, linking rather than reproducing applicable requirements and ADRs. The [proposed M1 contract](contracts/m1-payment-creation-contract.md) and **two draft tasks** are now on GitHub for review. Before Codex execution, obtain explicit approval of the new contract details and task breakdown, then update their statuses.
 4. The user initializes the baseline via Spring Initializr; Codex implements approved small tasks through the selected orchestration workflow. Run tests and review contributions against the GitHub source-of-truth docs.
 5. Update documentation for explicitly approved changes; move to the next milestone after verification.
 
