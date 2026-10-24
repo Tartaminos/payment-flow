@@ -9,7 +9,7 @@ Safely reconcile an existing `UNKNOWN` financial operation using authoritative P
 ## Required Behavior
 
 - Query the simulated PSP by the **original** operation/provider idempotency identity and correlate results with the existing PaymentOperation.
-- Apply definitive authorization/capture/void evidence through permitted state transitions, with append-only audit and no new financial operation.
+- Apply authoritative AUTHORIZE/CAPTURE/VOID evidence through permitted state transitions, with append-only audit and no new financial operation.
 - On missing/ambiguous/conflicting evidence, retain `UNKNOWN` and the last confirmed Payment state; retry lookup separately from financial PSP attempts.
 
 ## Scope Lock
@@ -37,5 +37,6 @@ Safely reconcile an existing `UNKNOWN` financial operation using authoritative P
 
 - [M3-03](M3-03-bounded-psp-attempts-and-unknown.md)
 - [M4-02](M4-02-execute-full-capture.md)
+- [M4-03](M4-03-void-authorized-payment.md)
 - [M5-04](M5-04-dispatch-due-technical-retries.md)
 - M6 contract approval: PSP status-query evidence, reconciliation eligibility, polling/backoff and crash recovery.
