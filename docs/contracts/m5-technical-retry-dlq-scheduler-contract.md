@@ -1,7 +1,7 @@
 # M5 — Technical Retry, DLQ, Durable Scheduler & Dispatcher Contract
 
-- **Status:** **PROPOSED — pending explicit user approval** (2026-10-24). M5's four slices remain PLANNED.
-- **Authority:** [ADR-0005](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md), [ADR-0006](../adr/0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md), [ADR-0007](../adr/0007-single-kafka-retry-topic-and-dlq.md), [ADR-0008](../adr/0008-persistent-kafka-retry-scheduler.md), [ADR-0009](../adr/0009-exponential-backoff-with-jitter-for-kafka-retries.md), [M2 contract](m2-outbox-kafka-contract.md), [M3 proposal](m3-payment-processor-contract.md).
+- **Status:** **APPROVED for M5 implementation** (2026-10-24). The user explicitly accepted this contract and all four M5 tasks; execute after corresponding earlier task dependencies through local Codex.
+- **Authority:** [ADR-0005](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md), [ADR-0006](../adr/0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md), [ADR-0007](../adr/0007-single-kafka-retry-topic-and-dlq.md), [ADR-0008](../adr/0008-persistent-kafka-retry-scheduler.md), [ADR-0009](../adr/0009-exponential-backoff-with-jitter-for-kafka-retries.md), [M2 contract](m2-outbox-kafka-contract.md), [approved M3 contract](m3-payment-processor-contract.md).
 - **Invariant:** Technical consumer retries are **not** financial PSP retries. `UNKNOWN` is reconciled independently. Never advance an original offset before a durable outcome or independently recoverable handoff.
 
 ## Local topology and exact names
@@ -48,4 +48,4 @@
 
 **Task order:** [M5-01](../tasks/M5-01-durable-technical-retry-handoff.md) → [M5-02](../tasks/M5-02-quarantine-poison-commands.md) / [M5-03](../tasks/M5-03-persist-technical-retry-schedules.md) → [M5-04](../tasks/M5-04-dispatch-due-technical-retries.md). The complete M5 is operationally recoverable **only after M5-03/M5-04**; do not claim a producer-only retry topic has infinite durable recovery.
 
-**Approval gate:** Scope and technical contract are proposed; M5 task statuses stay PLANNED until the user explicitly accepts them. No code is initiated by this document.
+**Approval recorded 2026-10-24:** M5 scope and exact retry/DLQ/Scheduler/Dispatcher contract and the four tasks are approved. Keep the prerequisite/dependency gates, especially durable handoff and Scheduler readiness. Approval does not automatically invoke Codex.
