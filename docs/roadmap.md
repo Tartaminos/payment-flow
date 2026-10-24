@@ -3,7 +3,7 @@
 - **Status:** Roadmap established; M1 scope approved; M2–M6 are proposals for later approval.
 - **Date:** 2026-10-24
 - **Source of truth:** This file, the [M1 specification](milestones/m1-payment-creation-idempotency.md), [business requirements](requirement/), [domain](domain/) and [accepted ADRs](adr/).
-- **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts and acceptance criteria are approved and committed. No downstream design gap authorizes inventing financial business rules.
+- **Method:** Deliver small, reviewable increments. Codex implements only a milestone after its contracts, acceptance criteria **and task-brief structure** are approved and committed. No downstream design gap authorizes inventing financial business rules.
 
 ## Milestones
 
@@ -24,12 +24,14 @@ The user explicitly approved **API + PostgreSQL + transactional Outbox + audit +
 
 The API accepts requests durably; it does **not** report financial authorization/capture success before PSP processing exists. The Outbox is **persisted but not published** in M1.
 
+**Additional agreed implementation context:** one stable synthetic merchant from application configuration ([ADR-0023](adr/0023-configured-single-merchant-for-educational-mvp.md)); the user will bootstrap the project through **Spring Initializr**. For subsequent Codex work, the intended tool is the **orchestration skill in the `remove-agents-from-flow` branch of the `agents-benchmark` repository**. Its owner/path, exact content and compatibility have not yet been independently verified here. **Do not create tasks or implementation briefs before the user and assistant agree on how tasks will be structured and represented in GitHub.**
+
 ## Suggested delivery rhythm
 
 1. Agree on a milestone's scope.
 2. Close only the contracts required for that milestone in GitHub (ADRs/specs where needed).
-3. Commit a Codex-ready task brief with testable acceptance criteria and exclusions.
-4. Implement in small pull requests, run tests and review against the source-of-truth docs.
+3. **Before creating tasks or briefs**, inspect the selected orchestration skill, propose the task structure/storage, and obtain explicit user approval of that format. Only then prepare and commit Codex-ready tasks with testable acceptance criteria and exclusions.
+4. The user initializes the baseline via Spring Initializr; Codex implements approved small tasks through the selected orchestration workflow. Run tests and review contributions against the GitHub source-of-truth docs.
 5. Update documentation for explicitly approved changes; move to the next milestone after verification.
 
 **Avoid speculative scaling:** local educational MVP, no production traffic target. When Kafka workers are implemented, the approved initial main-topic baseline is 4 partitions / 1 consumer instance / 4 async workers (ADR-0021). Backpressure queue sizes and detailed recovery are intentionally deferred until relevant.
