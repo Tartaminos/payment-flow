@@ -1,6 +1,6 @@
 # M1-01 — Transactional Payment Acceptance
 
-**Status:** DRAFT — awaiting M1 contract/task-breakdown approval; **do not run Codex yet**.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the configured local Codex orchestration skill; this file's creation/approval does not start execution.
 
 ## Objective
 
@@ -21,7 +21,7 @@ Deliver one working `POST /payments` vertical slice that durably accepts a new p
 
 ## Authoritative Sources
 
-- [M1 API/persistence contract](../contracts/m1-payment-creation-contract.md) (**draft; approval required**)
+- [M1 API/persistence contract](../contracts/m1-payment-creation-contract.md) (**approved**)
 - [M1 scope](../milestones/m1-payment-creation-idempotency.md)
 - [ADR-0004](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md), [ADR-0023](../adr/0023-configured-single-merchant-for-educational-mvp.md)
 - [Relational model](../domain/relational-data-model.md), [BR-001](../requirement/BR-001-idempotent-payment-requests.md), [ADR-0011](../adr/0011-execute-payment-operation-command-envelope.md)
