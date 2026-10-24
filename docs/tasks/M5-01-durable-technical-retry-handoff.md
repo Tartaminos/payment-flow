@@ -16,7 +16,7 @@ Transfer transient Kafka-consumer processing failures to the one approved techni
 
 **Include:** Main-topic retry handoff, recovery context and injected broker/database-failure tests.
 
-**Exclude:** No PSP financial retry disguised as technical retry, no fixed retry-count-to-DLQ policy or delayed dispatcher (M5-04).
+**Exclude:** No PSP financial retry disguised as technical retry, no fixed retry-count-to-DLQ policy or delayed dispatcher (M5-04). **Do not claim M5's retry path is deployable/recoverable beyond Kafka retention until M5-03's durable scheduler ingestion exists**; the retry-topic is only a time-limited durable buffer.
 
 ## Authoritative Sources
 
