@@ -20,6 +20,7 @@ Process different payments concurrently without overlapping conflicting operatio
 
 ## Authoritative Sources
 
+- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
 - [A20](../adr/0020-bounded-async-payment-processing-with-per-payment-exclusion.md)
 - [A21](../adr/0021-small-mvp-kafka-partition-and-worker-topology.md)
 - [A22](../adr/0022-bounded-per-payment-waiting-queue.md)
