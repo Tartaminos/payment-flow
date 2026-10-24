@@ -20,6 +20,7 @@ Make consumer-group progress reflect only contiguous durably processed or indepe
 
 ## Authoritative Sources
 
+- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [A20](../adr/0020-bounded-async-payment-processing-with-per-payment-exclusion.md)
 - [A21](../adr/0021-small-mvp-kafka-partition-and-worker-topology.md)
