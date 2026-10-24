@@ -100,6 +100,10 @@ The sequence illustrates responsibilities, **not** guaranteed message ordering o
 - The Outbox does **not** guarantee exactly-once Kafka delivery or exactly-once external PSP effects; idempotent consumers, provider guarantees and reconciliation remain essential.
 - Availability/throughput bottlenecks and delayed processing must be surfaced to clients through status retrieval and eventual operational observability.
 
+## Subsequent M1 implementation decisions
+
+The [approved M1 API, idempotency and persistence contract](../contracts/m1-payment-creation-contract.md) (2026-10-24) resolves the **M1** acceptance status and response shape (`202`, `400`, `409`), SHA-256 canonical request identity, no automatic idempotency-key expiry in M1, and minimum pending Outbox persistence fields. The two [M1](../milestones/m1-payment-creation-idempotency.md) tasks were approved for local Codex implementation. The remaining questions below continue to apply outside the M1-specific decisions; neither the Kafka publisher nor PSP execution is part of M1.
+
 ## Open design questions (not approved by this ADR)
 
 - Final acceptance HTTP response semantics (`202` vs. `201`), response body, status endpoint payload and error contracts.
