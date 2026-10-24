@@ -28,9 +28,9 @@ Make accepted Outbox work recoverable across broker outages, crashes and duplica
 
 ## Acceptance Criteria
 
-1. Broker unavailable: accepted payment/Outbox stays committed, pending and later publishable.
+1. **Broker or Schema Registry unavailable:** the accepted Payment/Outbox remains committed, pending or reclaimable, and publishes on recovery without requiring a new client request.
 2. Crash after Kafka acknowledged but before marking sent: retry may duplicate the Kafka record but retains the same logical publication identity.
-3. Publisher retry and concurrency do not lose or permanently strand pending intents.
+3. Concurrent/expired Outbox claims do not lose or permanently strand intents: a **stale claimant cannot overwrite newer claim ownership or delivery state**, and another Publisher can reclaim after lease expiry.
 
 ## Dependencies
 
