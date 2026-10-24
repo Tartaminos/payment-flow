@@ -1,6 +1,6 @@
 # M5-02 — Poison Command Quarantine
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the local Codex orchestration skill **after the preceding dependency tasks are complete and independently verified**; a partial retry pipeline is not production/recovery complete. Approval alone does not run Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Quarantine definitively unprocessable commands without erasing or fabricating fi
 
 ## Authoritative Sources
 
-- [M5 proposed implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**PROPOSED — review before implementation**)
+- [M5 approved implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**APPROVED**)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [A6](../adr/0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md)
 - [A7](../adr/0007-single-kafka-retry-topic-and-dlq.md)
@@ -36,4 +36,4 @@ Quarantine definitively unprocessable commands without erasing or fabricating fi
 ## Dependencies
 
 - [M5-01](M5-01-durable-technical-retry-handoff.md)
-- M5 contract approval: poison taxonomy, quarantine record/schema and controlled replay policy.
+- Approved [M5 implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md): poison taxonomy, quarantine record/schema and controlled replay policy.
