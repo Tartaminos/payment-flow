@@ -24,6 +24,8 @@ Build the first runnable **local** vertical slice: accept an idempotent payment 
 
 **Technical direction to finalize before Codex:** Java + Spring Boot and PostgreSQL for M1, with user-provided **Spring Initializr** project bootstrap. Build/dependency versions, build tool, migrations and test tooling still require agreement. Initializr generation is performed by the user, not an unrequested Codex scaffold.
 
+**Initializr dependency choice approved:** include **HTTP Client** and **Spring for Apache Kafka** in the generated project's dependencies now, because both are already planned for later milestones. Their inclusion in the build is **not** authorization to implement PSP HTTP calls, Kafka producers/consumers, topic creation or broker-dependent startup in M1. Keep M1 runnable with PostgreSQL but without an active Kafka broker. Other dependency/configuration selections still require separate approval.
+
 ## Initial testable acceptance criteria
 
 - **M1-AC-01 — New request:** one valid request yields **one** Payment in `CREATED`, **one** `AUTHORIZE:PENDING` operation, one scoped idempotency association, an admission audit entry and one pending Outbox intent; the request receives durable acceptance.
