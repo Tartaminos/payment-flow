@@ -20,6 +20,7 @@ Make accepted Outbox work recoverable across broker outages, crashes and duplica
 
 ## Authoritative Sources
 
+- [M2 proposed implementation contract](../contracts/m2-outbox-kafka-contract.md) (**DRAFT — not approved**)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
 - [A11](../adr/0011-execute-payment-operation-command-envelope.md)
 - [A17](../adr/0017-avro-payload-as-command-source-kafka-headers-for-transport.md)
