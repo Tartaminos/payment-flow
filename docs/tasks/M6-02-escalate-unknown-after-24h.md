@@ -1,6 +1,6 @@
 # M6-02 — Escalate UNKNOWN After 24 Hours
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute via the local Codex orchestration skill **only after dependencies are complete and independently verified**; this approval neither launches Codex nor claims production compliance.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Make unresolved PSP operations older than 24 hours visible for required reconcil
 
 ## Authoritative Sources
 
-- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
+- [M6 approved implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**APPROVED**)
 - [BR5](../requirement/BR-005-reconciliation-after-24h-unknown.md)
 - [BR2](../requirement/BR-002-uncertain-psp-outcomes.md)
 - [BR8](../requirement/BR-008-block-conflicting-financial-operations.md)
@@ -36,4 +36,4 @@ Make unresolved PSP operations older than 24 hours visible for required reconcil
 ## Dependencies
 
 - [M6-01](M6-01-resolve-original-unknown-psp-operations.md)
-- M6 contract approval: escalation storage/notification/visibility and status-query scheduling behavior.
+- Approved [M6 implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md): escalation storage/notification/visibility and status-query scheduling behavior.
