@@ -20,6 +20,7 @@ Make payment creation, external operation processing and recovery auditable and 
 
 ## Authoritative Sources
 
+- [M6 proposed implementation contract](../contracts/m6-reconciliation-observability-acceptance-contract.md) (**PROPOSED — review before implementation**)
 - [NFR1](../requirement/NFR-001-transaction-traceability-and-retention.md)
 - [A2](../adr/0002-append-only-audit-and-retention.md)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
