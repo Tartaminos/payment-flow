@@ -1,6 +1,6 @@
 # M4-01 — Idempotent Full Capture Admission
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Execute through the local Codex orchestration skill **only after each dependency has passed independent verification**; M4 safe order is M4-01 → M4-04 → M4-02 → M4-03. Approval alone does not execute code.
 
 ## Objective
 
@@ -8,7 +8,7 @@ Admit one full capture operation through a replay-safe API without invoking the 
 
 ## Required Behavior
 
-- For a verified eligible `AUTHORIZED` Payment, a proposed capture endpoint atomically persists one `CAPTURE:PENDING`, scoped client idempotency, audit and a pending Outbox command referencing the operation. **Fail closed without affirmative PSP ACTIVE authorization evidence**; do not wait for M4-04 to make admission safe.
+- For a verified eligible `AUTHORIZED` Payment, the approved capture endpoint atomically persists one `CAPTURE:PENDING`, scoped client idempotency, audit and a pending Outbox command referencing the operation. **Fail closed without affirmative PSP ACTIVE authorization evidence**; do not wait for M4-04 to make admission safe.
 - Equivalent replay resolves to the same capture operation; changed parameters on a reused key conflict; a new key after `CAPTURED` returns `PAYMENT_ALREADY_CAPTURED`.
 - Reject concurrent or independently conflicting capture admissions while a previous operation is `PENDING`, `PROCESSING` or `UNKNOWN` when business-incompatible.
 
@@ -20,7 +20,7 @@ Admit one full capture operation through a replay-safe API without invoking the 
 
 ## Authoritative Sources
 
-- [M4 proposed implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**PROPOSED — review before implementation**)
+- [M4 approved implementation contract](../contracts/m4-capture-void-expiration-contract.md) (**APPROVED**)
 - [BR4](../requirement/BR-004-idempotent-capture-requests.md)
 - [BR8](../requirement/BR-008-block-conflicting-financial-operations.md)
 - [A4](../adr/0004-synchronous-acceptance-asynchronous-processing-with-outbox.md)
@@ -37,4 +37,4 @@ Admit one full capture operation through a replay-safe API without invoking the 
 ## Dependencies
 
 - [M3-05](M3-05-durable-kafka-offset-progress.md)
-- M4 contract approval: capture endpoint request/response/errors, key scope, PSP identity and transaction eligibility.
+- Approved [M4 implementation contract](../contracts/m4-capture-void-expiration-contract.md): capture endpoint request/response/errors, key scope, PSP identity and transaction eligibility.
