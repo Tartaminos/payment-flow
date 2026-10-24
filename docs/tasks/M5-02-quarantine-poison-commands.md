@@ -20,6 +20,7 @@ Quarantine definitively unprocessable commands without erasing or fabricating fi
 
 ## Authoritative Sources
 
+- [M5 proposed implementation contract](../contracts/m5-technical-retry-dlq-scheduler-contract.md) (**PROPOSED — review before implementation**)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
 - [A6](../adr/0006-distinguish-kafka-processing-retries-and-financial-reconciliation.md)
 - [A7](../adr/0007-single-kafka-retry-topic-and-dlq.md)
