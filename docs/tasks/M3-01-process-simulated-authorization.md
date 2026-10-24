@@ -1,6 +1,6 @@
 # M3-01 — Consume and Resolve Authorization
 
-**Status:** PLANNED — backlog split approved; **NOT approved for Codex implementation** until this milestone and its contracts are approved.
+**Status:** APPROVED for implementation (2026-10-24). Run via the configured local Codex orchestration skill **only after prerequisite tasks are complete and independently verified**; documentation approval does not execute Codex.
 
 ## Objective
 
@@ -20,7 +20,7 @@ Process an existing AUTHORIZE command with a simulated PSP and record verified f
 
 ## Authoritative Sources
 
-- [M3 proposed implementation contract](../contracts/m3-payment-processor-contract.md) (**PROPOSED — review before implementation**)
+- [M3 approved implementation contract](../contracts/m3-payment-processor-contract.md) (**APPROVED**)
 - [A10](../adr/0010-generic-execute-payment-operation-command.md)
 - [A11](../adr/0011-execute-payment-operation-command-envelope.md)
 - [A5](../adr/0005-manual-kafka-offset-commit-and-recoverable-processing.md)
@@ -38,4 +38,4 @@ Process an existing AUTHORIZE command with a simulated PSP and record verified f
 ## Dependencies
 
 - [M2-02](M2-02-recover-outbox-publication.md)
-- M3 contract approval: fake PSP endpoints, provider identity/idempotency, response taxonomy and worker handoff/acknowledgment boundary.
+- Approved [M3 implementation contract](../contracts/m3-payment-processor-contract.md): fake PSP endpoints, provider identity/idempotency, response taxonomy and worker handoff/acknowledgment boundary.
