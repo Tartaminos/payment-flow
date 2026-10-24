@@ -26,14 +26,14 @@
 - M4-01 first admission atomically creates existing-Payment `CAPTURE:PENDING`, scoped idempotency, audit and one pending Outbox intent, without PSP capture in the client HTTP request. **Admission must obtain row/conditional DB eligibility checks, not only a previously fetched status**. New conflicting CAPTURE/VOID is rejected while `PENDING`, `PROCESSING` or `UNKNOWN` operations make the request unsafe.
 - M4-04's expiry guard is required **before M4-02**: verify before admitting/executing, preserve provider evidence and prevent an expired authorization from reaching the PSP.
 - M4-02 consumes the original generic `ExecutePaymentOperation`, rechecks authoritative DB state, PSP validity and stable financial identity. Confirmed full capture → `Payment:CAPTURED` and `CAPTURE:SUCCEEDED`, plus audit in one DB transaction. Explicit provider rejection → `CAPTURE:REJECTED` without marking Payment CAPTURED. Proven no-effect → `CAPTURE:FAILED`; ambiguity → `CAPTURE:UNKNOWN` (Payment remains last confirmed AUTHORIZED) and durable reconciliation job.
-- All CAPTURE HTTP retries count against that operation's **same total 3 attempts**, with 5s/10s/20s request budgets and no reset after Kafka replay. M3's independent recovery mechanism and M6's generalized reconciliation use the same original PSP operation ID.
+- All CAPTURE HTTP retries count against that operation's **same total 3 attempts**, with 5s/10s/20s request budgets and no reset after Kafka replay. **M4-02 must extend M3's existing independent reconciliation scanner to perform active, durably resumable PSP status lookup and minimal definitive-outcome resolution for CAPTURE UNKNOWN before its Kafka offset can be acknowledged.** Preserve the original PSP operation ID. M6-01 later completes/generalizes reconciliation semantics and evidence handling for all operation types.
 
 ## Void (M4-03)
 
 - VOID admission/execution is an **eligible authorized-payment cancellation**, not expiry and never a refund. Use scoped idempotency and single-transaction `VOID:PENDING` + audit + Outbox, with the same conflict/eligibility guards as capture.
 - Confirmed void → `Payment:CANCELED` and `VOID:SUCCEEDED` with audit in one transaction. Explicit refusal or proven non-execution does not produce CANCELED. Timeout/unknown PSP outcome → `VOID:UNKNOWN`, Payment retains AUTHORIZED and independent reconciliation responsibility exists.
 - Reject VOID if Payment is CAPTURED, EXPIRED, CANCELED, or has conflicting pending/processing/unknown financial work. PSP-side void response is authoritative and may reject a changed authorization state; preserve original operation ID and evidence.
-- No independent PSP action may be retried merely due to consumer redelivery; only provider-idempotent attempts with the same original identity are permitted.
+- No independent PSP action may be retried merely due to consumer redelivery; only provider-idempotent attempts with the same original identity are permitted. **M4-03 extends that same active, independently recoverable scanner to VOID UNKNOWN with original PSP ID before allowing UNKNOWN offset acknowledgment**; mere passive job storage does not qualify.
 
 ## Concurrency, transition proof and tests
 
