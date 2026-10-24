@@ -17,6 +17,8 @@
 
 ### M2 — Outbox Publisher & Kafka Transport (2 planned; implementation contracts pending)
 
+**M2 contract under review:** [draft Outbox/Kafka/Avro implementation contract](../contracts/m2-outbox-kafka-contract.md). This proposal does not change the PLANNED implementation status of either M2 task.
+
 | Task | Observable outcome | Depends on | State |
 | --- | --- | --- | --- |
 | [M2-01 — First Outbox Command Published](../tasks/M2-01-publish-first-outbox-command.md) | A committed `ExecutePaymentOperation` Outbox intent becomes a decodable Avro command in local Kafka using Schema Registry, `RecordNameStrategy`, `FULL_TRANSITIVE`, and the canonical `paymentId` UTF-8 key. Broker/registry in local Docker; command carries accepted identities, no real PSP processing. | M1-02; approved Kafka/Avro/topic contract | **PLANNED** (not executable) |
