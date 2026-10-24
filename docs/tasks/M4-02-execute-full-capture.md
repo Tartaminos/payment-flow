@@ -10,7 +10,7 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 - Consume the existing CAPTURE command, revalidate the Payment's authorization **and authoritative expiry evidence** using the guard established by M4-04, then call the fake PSP under the same stable operation identity **only if eligible**. If expiration is confirmed, do not call the PSP; if validity is unresolved, follow the M4 contract's safe deferral/resolution policy rather than assuming eligibility.
 - Only a confirmed full PSP capture transitions Payment to `CAPTURED` and CAPTURE operation to `SUCCEEDED`; update audit in the same transaction.
-- Duplicate or out-of-order records never cause a second charge; ambiguous outcomes remain UNKNOWN and cannot be recorded as success.
+- Duplicate or out-of-order records never cause a second charge; ambiguous outcomes remain UNKNOWN and cannot be recorded as success. **Extend M3's existing active independent PSP lookup/recovery scanner to CAPTURE UNKNOWN before acknowledging its Kafka offset**; preserve original CAPTURE operation identity.
 
 ## Scope Lock
 
@@ -32,7 +32,7 @@ Execute the accepted full CAPTURE operation through the generic worker without d
 
 1. Confirmed full capture of an eligible, nonexpired authorization transitions `AUTHORIZED→CAPTURED` exactly once and persists successful operation/audit atomically.
 2. Duplicate CAPTURE command causes no additional financial attempt when original result is confirmed.
-3. Confirmed expiry or unresolved validity cannot result in an unsafe CAPTURE call; unknown/timed-out PSP results do not falsely capture or discard the original operation identity.
+3. Confirmed expiry or unresolved validity cannot result in an unsafe CAPTURE call; CAPTURE UNKNOWN retains a durable **active recovery job** with original PSP identity and never falsely reports capture or advances its offset without recoverability.
 
 ## Dependencies
 
