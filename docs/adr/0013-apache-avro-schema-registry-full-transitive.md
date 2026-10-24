@@ -88,6 +88,8 @@ The paths and responsibilities remain those accepted in ADRs 0004–0011. This d
 
 ## Open decisions — not silently approved
 
+**Subsequent M2 implementation contract (approved 2026-10-24):** [M2 Outbox/Kafka contract](../contracts/m2-outbox-kafka-contract.md) selects the local Confluent-compatible Registry, the concrete command Avro type, registered writer-schema wire identity, `RecordNameStrategy`/`FULL_TRANSITIVE`, a four-partition main topic, and canonical `paymentId` **only in the key**. The older open questions below describe the ADR's original scope; M2-resolved details are now governed by the linked contract. Retry/DLQ and financial consumer contracts remain separate.
+
 - **Field types/defaults were decided in [ADR-0015](0015-avro-logical-types-and-optional-command-fields.md):** UUID logical types, `timestamp-millis`, and optional `causationId` via nullable union with `default: null`. Final Avro namespace/name, validation and physical schema remain open.
 - **[ADR-0017](0017-avro-payload-as-command-source-kafka-headers-for-transport.md) settles the payload/header boundary**: the Avro value carries essential command identifiers and meaning, while headers are optional transport/observability metadata. Exact optional header names and Registry schema-identity preservation remain open. The prior `schemaVersion` redundancy was resolved by [ADR-0016](0016-remove-redundant-command-schema-version.md).
 - **Subject naming was settled in [ADR-0014](0014-record-name-strategy-for-kafka-avro-subjects.md): `RecordNameStrategy` for Avro Kafka values**, with `FULL_TRANSITIVE` per fully qualified record name. Final record names/namespaces, registry vendor/hosting/security/configuration and producer/consumer schema resolution are still open.
