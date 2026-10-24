@@ -5,6 +5,37 @@
 - **Scope:** Static review of the [full task backlog](proposed-complete-task-backlog.md), all 21 Markdown files in [`docs/tasks/`](../tasks/), [roadmap](../roadmap.md), relevant accepted requirements, domain model and ADRs.
 - **Result:** **PASS for backlog documentation and approved task division; NOT an implementation or integration-test sign-off.** The two M1 tasks are independently approved for Codex implementation. The 19 tasks in M2–M6 are planned **but blocked on their milestone contracts/approval**.
 
+## Second full review of all 21 task files — 2026-10-24
+
+**Verdict:** **21/21 structurally sound and linked; NOT yet fully implementation-ready as a whole.** The two M1 tasks and two M2 tasks remain approved for sequential Codex work. The 17 tasks in M3–M6 remain planned and need specific contracts before execution. This is a GitHub-document/ADR review, **not** a compiled or integration-tested system.
+
+**Checks repeated after corrections:** all 21 task files exist on `main`; each follows the same six approved headings in order; all relative task/requirement/ADR/contract links target existing repository paths; all 30 declared task-to-task dependency edges refer to existing tasks; **no dependency cycle** was found. No task status was accidentally escalated.
+
+### Corrections implemented in this review
+
+1. **M4 dependency/ordering safety:** updated **M4-04 to depend on M4-01** and to provide an independently testable **expiry check at capture admission**. **M4-02 now depends on both M4-01 and M4-04**, reuses that check before calling the PSP, and M4-03 remains after M4-02. Correct M4 task order: **M4-01 → M4-04 → M4-02 → M4-03**. The [backlog index](proposed-complete-task-backlog.md) was synchronized; task count is unchanged. Exact source of authoritative expiry evidence remains an **M4 contract gate**.
+2. **M2-01:** removed possible exactly-once implication: M2 acceptance is **at least one** decodable Kafka record for a persisted publication.
+3. **M2-02 and M2 contract:** tests now include **Schema Registry unavailability** as well as broker unavailability; **a stale Outbox claim holder cannot overwrite a newer lease/claim or mark incorrect delivery progress**. This is a clarification of already approved safe at-least-once lease behavior, not a new delivery model.
+4. **M3-01:** explicitly requires disabling **consumer auto-commit from the first active consumer slice**; M3-05 retains responsibility for correct contiguous manual offset commits.
+5. **M5-01:** explicitly rejects claiming complete/retention-independent retry recovery until **M5-03's persistent Retry Scheduler** exists. A Kafka retry topic by itself is only a time-limited buffer.
+
+### Material concerns **still open** — do not silently design them in Codex
+
+| Severity | Area | Review finding | Required before sign-off |
+| --- | --- | --- | --- |
+| **CRITICAL** | **M3-03 / M3-05 / M6-01** | `UNKNOWN` must not be acknowledged on Kafka until an **independently durable and actually recoverable reconciliation responsibility** exists (ADR-0005). The M3 drafts currently permit retaining the offset uncommitted, which is financially safe but can cause partition head-of-line blocking **through M4/M5 while full reconciliation is deferred to M6**. | During the **M3 contract**, decide whether to introduce a minimal **active** durable UNKNOWN recovery handoff/scanner before M3-05 commits, or expressly accept a test-only uncommitted/blocked offset and prohibit declaring the interim consumer operationally complete. No assumed recovery from a passive row alone. |
+| **HIGH** | **M4-01 / M4-04 / M4-02** | The original order let capture execution precede authoritative expiry validation; **ordering is now corrected**, but provider evidence of *still valid vs definitively expired vs unknown* is unspecified. | Approve trusted PSP expiration evidence, admission/worker eligibility, safe deferral for ambiguous validity and the HTTP conflict/error contract. |
+| **HIGH** | **M5-01 / M5-03 / M5-04** | The technical retry topic's 7-day retention can expire retry messages before durable scheduling if the ingestion path is unavailable too long; Kafka acknowledgment alone is not indefinite recovery. | Approve monitoring, retention/backlog safety and operational activation requirements; do not treat M5-01 alone as complete end-to-end technical retry recovery. |
+| **MEDIUM** | **M3-02 / M3-04** | `GET /payments/{paymentId}` remains a proposed endpoint; global/per-payment FIFO bounds, backpressure/rebalance control and operation response schema are not yet approved. | Close the M3 API and worker-count/queue contract before invoking those tasks. |
+| **MEDIUM** | **M6-03 / M6-04** | Retention/observability and end-to-end fault-injection slices have unusually broad acceptance for single slices; tracing storage for 30 days and 5-year history enforcement have no executable local policy yet. | Narrow acceptance to demonstrable local policy, deterministic tests and documented exclusions in the eventual M6 contract; revisit slice size only if implementation shows they are too large. |
+
+### Ready-for-Codex gate after this review
+
+- **M1-01 → M1-02:** contract approved, ready for deliberate local Codex execution.
+- **M2-01 → M2-02:** contract approved, **only after M1 is complete and independently verified**.
+- **M3-01 through M6-04:** **PLANNED**, not yet executable. Their six-section task files are reviewable; the listed contract decisions are still open.
+- No Java implementation, test execution, Kafka startup or financial simulator run took place during this review.
+
 ## Structural and dependency checks
 
 | Check | Review result |
