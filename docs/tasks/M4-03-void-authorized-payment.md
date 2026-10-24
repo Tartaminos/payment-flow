@@ -10,7 +10,7 @@ Admit and execute eligible void/cancellation against one existing authorization.
 
 - Provide a proposed void endpoint creating one `VOID:PENDING` plus audit/Outbox only for an eligible authorization; replays keep one logical VOID identity.
 - Execute the existing operation through generic processing; `Payment:CANCELED` occurs only after PSP confirms the void.
-- Block void of captured/expired or business-ineligible payments and new conflicting operations while another result is unresolved; never confuse expiry with an explicit void.
+- Block void of captured/expired or business-ineligible payments and new conflicting operations while another result is unresolved; never confuse expiry with an explicit void. **Extend active independent PSP status lookup and recovery to VOID UNKNOWN before Kafka offset acknowledgment**; use the original VOID operation ID.
 
 ## Scope Lock
 
@@ -31,7 +31,7 @@ Admit and execute eligible void/cancellation against one existing authorization.
 
 1. Successful confirmed void produces one `VOID:SUCCEEDED` and `Payment:CANCELED` with audit.
 2. Replay, concurrency and conflicting UNKNOWN operation never start a new independent void.
-3. Invalid/expired/captured Payment is rejected without a PSP void, and timeout alone never becomes `CANCELED`.
+3. Invalid/expired/captured Payment is rejected without a PSP void; timeout alone never becomes `CANCELED`, and VOID UNKNOWN remains actively recoverable without needing original Kafka replay.
 
 ## Dependencies
 
