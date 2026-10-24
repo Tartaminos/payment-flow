@@ -8,7 +8,7 @@ Demonstrate that PaymentFlow recovers safely from realistic failures across the 
 
 ## Required Behavior
 
-- Exercise lost initial HTTP response, duplicate/out-of-order command, Kafka/broker downtime, publisher crash, worker crash/rebalance, retry scheduler restart and ambiguous PSP response.
+- Exercise lost initial HTTP response, duplicate/out-of-order command, Kafka/broker downtime, publisher crash, worker crash/rebalance, retry scheduler restart, ambiguous PSP response and authorized/captured/voided/expired payment paths.
 - Verify PostgreSQL Payment/PaymentOperation/audit remains authoritative throughout, independently recoverable work is not lost, and confirmed financial effects are never duplicated.
 - Failures may produce delayed/UNKNOWN results, but never fabricated success, failed/canceled-by-timeout or skipped offsets.
 
@@ -32,12 +32,13 @@ Demonstrate that PaymentFlow recovers safely from realistic failures across the 
 
 ## Acceptance Criteria
 
-1. Automated failure scenarios prove eventual safe recovery or explicitly visible unresolved work with original financial identity.
+1. Automated authorization, capture, void and confirmed-expiry failure scenarios prove eventual safe recovery or explicitly visible unresolved work with the original financial identity.
 2. Duplicate delivery, reruns and crashes do not create a second logical operation or silently skip a not-yet-durable Kafka record.
 3. Traces/audit support investigation without secrets; test suite can run locally against PostgreSQL/Kafka/Schema Registry/test PSP.
 
 ## Dependencies
 
+- [M4-04](M4-04-guard-expired-authorizations.md)
 - [M6-01](M6-01-resolve-original-unknown-psp-operations.md)
 - [M6-02](M6-02-escalate-unknown-after-24h.md)
 - [M6-03](M6-03-traceability-and-retention.md)
