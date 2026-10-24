@@ -23,7 +23,7 @@ Earlier illustrative figures of 20/40 commands per second are **not requirements
 | Payment Processor Kafka consumers | **1 active consumer instance in its consumer group** | This member can be assigned all four main-topic partitions |
 | Asynchronous Payment Processor worker pool | **4 workers maximum executing simultaneously** | Process different payments in parallel, outside the Kafka polling thread |
 | Per-payment active work | **At most 1 simultaneously active financial operation per `paymentId`** | Locally serialize conflicting work; rely on DB guards across rebalances, retry paths or instances |
-| Pending work | **Bounded, exact queue limit deferred** | Backpressure must apply rather than unbounded memory growth |
+| Pending work | **Bounded, exact queue limit deferred** | **[ADR-0022](0022-bounded-per-payment-waiting-queue.md) subsequently approves per-payment FIFO waiting** for locally busy payments; global admission remains bounded and needs backpressure |
 | Simulated PSP | **Yes** | No real cardholder data, real money or real PSP credentials |
 | Deployment context | **Local / learning MVP** | Not a production throughput or resilience target |
 
@@ -90,7 +90,7 @@ This is a **logical design sketch**, not four independently deployed worker serv
 
 ## Explicitly open
 
-- **Worker intake bound:** number of pending/queued records, per-partition in-flight limits and flow control; not the same as the now-approved four executing workers.
+- **[ADR-0022](0022-bounded-per-payment-waiting-queue.md) chooses bounded per-payment FIFO waiting** when locally busy; number of pending/queued records, per-partition in-flight limits and flow control remain open, distinct from the four executing workers.
 - Actual Kafka topic names, final consumer group ID, exact producer partitioner, and schema/serializer runtime setup.
 - Practical worker completion tracking, contiguous offset commits, poll-loop liveness, rebalance handling, shutdown and crash recovery.
 - Distributed database claim/lease/transition safeguards and valid-but-temporarily-ineligible operation handling.
