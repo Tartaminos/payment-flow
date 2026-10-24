@@ -10,7 +10,7 @@ Apply safe, bounded PSP attempts while preserving ambiguous financial results.
 
 - At most three **total** PSP HTTP attempts use request timeouts of 5s, 10s and 20s, and **only** when the fake PSP's idempotency guarantee permits retry under the same stable operation identity.
 - Definitive business decline, confirmed non-execution and ambiguous timeout map to `REJECTED`, `FAILED` and `UNKNOWN` respectively; preserve Payment's last confirmed state for UNKNOWN.
-- Persist attempt metadata, audit and a durable UNKNOWN recovery responsibility (or keep Kafka progress uncommitted until an independent recovery exists); Kafka replay never resets the attempt budget.
+- Persist attempt metadata before each external POST and atomically commit UNKNOWN + audit + durable reconciliation job. Deliver an **active independent AUTHORIZE lookup scanner** (not merely a passive row); Kafka redelivery never resets the attempt budget. If the scanner is unavailable or durable handoff is incomplete, withhold offset acknowledgment.
 
 ## Scope Lock
 
@@ -32,7 +32,7 @@ Apply safe, bounded PSP attempts while preserving ambiguous financial results.
 
 1. Definitive response stops the loop; safe retries never exceed the three approved timeout budgets and preserve the PSP idempotency key.
 2. All-ambiguous attempts produce `UNKNOWN` with original Payment state unchanged and traceable evidence; no false DECLINED/FAILED.
-3. Crash/redelivery cannot reset `attempt_count` or execute a new independent PSP action; UNKNOWN cannot justify an unsafe offset commit.
+3. A PSP response lost **after** its effect is committed is recoverable via the original PSP identity, independent of Kafka replay; crash/redelivery cannot reset `attempt_count` or issue a new independent PSP action. UNKNOWN cannot justify an unsafe offset commit.
 
 ## Dependencies
 
