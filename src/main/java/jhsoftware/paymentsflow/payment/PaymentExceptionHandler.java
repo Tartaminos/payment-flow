@@ -25,6 +25,12 @@ class PaymentExceptionHandler {
 	private static final ApiError IDEMPOTENCY_KEY_CONFLICT = new ApiError(
 			"IDEMPOTENCY_KEY_CONFLICT",
 			"The idempotency key is already used for different payment details.");
+	private static final ApiError INVALID_PAYMENT_ID = new ApiError(
+			"INVALID_PAYMENT_ID",
+			"The payment ID is not a valid identifier.");
+	private static final ApiError PAYMENT_NOT_FOUND = new ApiError(
+			"PAYMENT_NOT_FOUND",
+			"The payment could not be found.");
 
 	@ExceptionHandler({
 			InvalidPaymentRequestException.class,
@@ -41,6 +47,16 @@ class PaymentExceptionHandler {
 	@ExceptionHandler(IdempotencyKeyConflictException.class)
 	ResponseEntity<ApiError> idempotencyConflict() {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(IDEMPOTENCY_KEY_CONFLICT);
+	}
+
+	@ExceptionHandler(InvalidPaymentIdException.class)
+	ResponseEntity<ApiError> invalidPaymentId() {
+		return ResponseEntity.badRequest().body(INVALID_PAYMENT_ID);
+	}
+
+	@ExceptionHandler(PaymentNotFoundException.class)
+	ResponseEntity<ApiError> paymentNotFound() {
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(PAYMENT_NOT_FOUND);
 	}
 
 	@ExceptionHandler(DataIntegrityViolationException.class)
