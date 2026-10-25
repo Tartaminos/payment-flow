@@ -5,15 +5,25 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import com.jayway.jsonpath.JsonPath;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
@@ -32,6 +42,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
@@ -69,6 +80,24 @@ class OutboxRealMessagingIntegrationTests {
 
 	@Autowired
 	SchemaRegistryClient schemaRegistryClient;
+
+	@Autowired
+	OutboxPublicationRepository publicationRepository;
+
+	@Autowired
+	Schema executePaymentOperationSchema;
+
+	@Autowired
+	OutboxMessagingConfiguration.SchemaRegistryContract schemaRegistryContract;
+
+	@Autowired
+	OutboxMessagingProperties messagingProperties;
+
+	@Autowired
+	Clock clock;
+
+	@Autowired
+	KafkaTemplate<String, Object> kafkaTemplate;
 
 	@BeforeEach
 	void cleanDatabase() {
@@ -121,6 +150,87 @@ class OutboxRealMessagingIntegrationTests {
 		assertThat(schemaRegistryClient.getAllSubjects()).contains(SUBJECT);
 		assertThat(schemaRegistryClient.getCompatibility(SUBJECT)).isEqualTo("FULL_TRANSITIVE");
 		assertTopicContract();
+	}
+
+	@Test
+	void concurrentPublisherInstancesPublishEverySeededRowExactlyOnceWithoutOwnershipViolations() throws Exception {
+		int seededCount = 10;
+		Set<UUID> messageIds = IntStream.range(0, seededCount)
+				.mapToObj(index -> seedAcceptedPayment(index))
+				.collect(Collectors.toSet());
+
+		List<OutboxPublisher> publishers = IntStream.range(0, 3)
+				.mapToObj(index -> new OutboxPublisher(
+						publicationRepository,
+						kafkaTemplate,
+						executePaymentOperationSchema,
+						schemaRegistryContract,
+						messagingProperties,
+						clock))
+				.collect(Collectors.toList());
+
+		try (KafkaConsumer<byte[], Object> consumer = consumer()) {
+			consumer.subscribe(List.of(TOPIC));
+			awaitAssignment(consumer);
+
+			ExecutorService executor = Executors.newFixedThreadPool(publishers.size());
+			List<Future<?>> futures = publishers.stream()
+					.map(publisher -> executor.submit(() -> {
+						for (int round = 0; round < 5; round++) {
+							publisher.publishPending();
+						}
+					}))
+					.collect(Collectors.toList());
+			for (Future<?> future : futures) {
+				future.get(30, TimeUnit.SECONDS);
+			}
+			executor.shutdown();
+			executor.awaitTermination(10, TimeUnit.SECONDS);
+
+			Set<UUID> observedMessageIds = awaitMessages(consumer, messageIds);
+			assertThat(observedMessageIds).containsExactlyInAnyOrderElementsOf(messageIds);
+		}
+
+		List<Map<String, Object>> deliveries = jdbcTemplate.queryForList(
+				"SELECT message_id, status, claimed_by FROM outbox_events");
+		assertThat(deliveries).hasSize(seededCount);
+		assertThat(deliveries).allSatisfy(delivery -> {
+			assertThat(delivery.get("status")).isEqualTo("PUBLISHED");
+			assertThat(delivery.get("claimed_by")).isNull();
+		});
+	}
+
+	private UUID seedAcceptedPayment(int index) {
+		try {
+			MvcResult response = mockMvc.perform(post("/payments")
+					.header("Idempotency-Key", "real-messaging-concurrent-" + index + "-" + UUID.randomUUID())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"orderId\":\"real-concurrent-" + index + "\",\"amount\":50000,\"currency\":\"BRL\"}"))
+					.andExpect(status().isAccepted())
+					.andReturn();
+			UUID paymentId = UUID.fromString(JsonPath.read(
+					response.getResponse().getContentAsString(), "$.paymentId"));
+			return jdbcTemplate.queryForObject(
+					"SELECT message_id FROM outbox_events WHERE payment_id = ?", UUID.class, paymentId);
+		}
+		catch (Exception exception) {
+			throw new RuntimeException(exception);
+		}
+	}
+
+	private Set<UUID> awaitMessages(KafkaConsumer<byte[], Object> consumer, Set<UUID> expectedMessageIds) {
+		Set<UUID> observed = new HashSet<>();
+		long deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos();
+		while (observed.size() < expectedMessageIds.size() && System.nanoTime() < deadline) {
+			for (ConsumerRecord<byte[], Object> record : consumer.poll(Duration.ofMillis(500))) {
+				GenericRecord command = (GenericRecord) record.value();
+				UUID messageId = UUID.fromString(command.get("messageId").toString());
+				if (expectedMessageIds.contains(messageId)) {
+					observed.add(messageId);
+				}
+			}
+		}
+		return observed;
 	}
 
 	private KafkaConsumer<byte[], Object> consumer() {

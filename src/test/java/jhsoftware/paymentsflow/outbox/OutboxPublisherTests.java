@@ -1,6 +1,9 @@
 package jhsoftware.paymentsflow.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -47,14 +50,13 @@ class OutboxPublisherTests {
 		@SuppressWarnings("unchecked")
 		KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
 		Schema schema = new OutboxMessagingConfiguration().executePaymentOperationSchema();
-		OutboxPublication publication = publication(PAYMENT_ID);
-		when(repository.findPending(20)).thenReturn(List.of(publication));
+		OutboxPublication publication = publication(PAYMENT_ID, 1);
+		when(repository.claimPending(eq(20), any(), any(), any())).thenReturn(List.of(publication));
 		when(kafkaTemplate.send(eq(OutboxMessagingConfiguration.TOPIC), eq(PAYMENT_ID.toString()),
-				org.mockito.ArgumentMatchers.any()))
-				.thenReturn(CompletableFuture.completedFuture(null));
-		when(repository.markPublished(MESSAGE_ID, PUBLISHED_AT)).thenReturn(true);
+				any())).thenReturn(CompletableFuture.completedFuture(null));
+		when(repository.markPublished(eq(MESSAGE_ID), any(), any())).thenReturn(true);
 
-		publisher(repository, kafkaTemplate, schema).publishPending();
+		publisher(repository, kafkaTemplate, schema, Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC)).publishPending();
 
 		ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
 		ArgumentCaptor<Object> value = ArgumentCaptor.forClass(Object.class);
@@ -73,43 +75,62 @@ class OutboxPublisherTests {
 		assertThat(record.get("correlationId").toString()).isEqualTo(CORRELATION_ID.toString());
 		assertThat(record.get("occurredAt")).isEqualTo(OCCURRED_AT.toEpochMilli());
 		assertThat(record.get("causationId")).isNull();
-		verify(repository).markPublished(MESSAGE_ID, PUBLISHED_AT);
+		verify(repository).markPublished(eq(MESSAGE_ID), any(), eq(PUBLISHED_AT));
+		verify(repository, never()).releaseForRetry(any(), any(), any());
 	}
 
 	@Test
-	void failedSendLeavesPendingStateUntouched() {
+	void failedSendReleasesClaimWithBackoffInsteadOfMarkingPublished() {
 		OutboxPublicationRepository repository = mock(OutboxPublicationRepository.class);
 		@SuppressWarnings("unchecked")
 		KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
-		when(repository.findPending(20)).thenReturn(List.of(publication(PAYMENT_ID)));
+		when(repository.claimPending(eq(20), any(), any(), any())).thenReturn(List.of(publication(PAYMENT_ID, 1)));
 		when(kafkaTemplate.send(eq(OutboxMessagingConfiguration.TOPIC), eq(PAYMENT_ID.toString()),
-				org.mockito.ArgumentMatchers.any()))
-				.thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker unavailable")));
+				any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker unavailable")));
 
-		publisher(repository, kafkaTemplate, new OutboxMessagingConfiguration().executePaymentOperationSchema())
+		publisher(repository, kafkaTemplate, new OutboxMessagingConfiguration().executePaymentOperationSchema(),
+				Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC))
 				.publishPending();
 
-		verify(repository, never()).markPublished(org.mockito.ArgumentMatchers.any(),
-				org.mockito.ArgumentMatchers.any());
+		verify(repository, never()).markPublished(any(), any(), any());
+		ArgumentCaptor<Instant> nextEligibleAt = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).releaseForRetry(eq(MESSAGE_ID), any(), nextEligibleAt.capture());
+		assertThat(nextEligibleAt.getValue()).isEqualTo(PUBLISHED_AT.plusSeconds(5));
 	}
 
 	@Test
-	void inconsistentAuthoritativePaymentIdentityIsNotPublished() {
+	void repeatedFailuresGrowBackoffUpToConfiguredCap() {
 		OutboxPublicationRepository repository = mock(OutboxPublicationRepository.class);
 		@SuppressWarnings("unchecked")
 		KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
-		when(repository.findPending(20)).thenReturn(List.of(
-				publication(UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"))));
+		when(repository.claimPending(eq(20), any(), any(), any())).thenReturn(List.of(publication(PAYMENT_ID, 5)));
+		when(kafkaTemplate.send(eq(OutboxMessagingConfiguration.TOPIC), eq(PAYMENT_ID.toString()),
+				any())).thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker unavailable")));
 
-		publisher(repository, kafkaTemplate, new OutboxMessagingConfiguration().executePaymentOperationSchema())
+		publisher(repository, kafkaTemplate, new OutboxMessagingConfiguration().executePaymentOperationSchema(),
+				Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC))
 				.publishPending();
 
-		verify(kafkaTemplate, never()).send(
-				org.mockito.ArgumentMatchers.anyString(),
-				org.mockito.ArgumentMatchers.anyString(),
-				org.mockito.ArgumentMatchers.any());
-		verify(repository, never()).markPublished(org.mockito.ArgumentMatchers.any(),
-				org.mockito.ArgumentMatchers.any());
+		ArgumentCaptor<Instant> nextEligibleAt = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).releaseForRetry(eq(MESSAGE_ID), any(), nextEligibleAt.capture());
+		assertThat(nextEligibleAt.getValue()).isEqualTo(PUBLISHED_AT.plusSeconds(60));
+	}
+
+	@Test
+	void inconsistentAuthoritativePaymentIdentityIsReleasedWithoutPublishing() {
+		OutboxPublicationRepository repository = mock(OutboxPublicationRepository.class);
+		@SuppressWarnings("unchecked")
+		KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
+		when(repository.claimPending(eq(20), any(), any(), any())).thenReturn(List.of(
+				publication(UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), 1)));
+
+		publisher(repository, kafkaTemplate, new OutboxMessagingConfiguration().executePaymentOperationSchema(),
+				Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC))
+				.publishPending();
+
+		verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
+		verify(repository, never()).markPublished(any(), any(), any());
+		verify(repository).releaseForRetry(eq(MESSAGE_ID), any(), eq(PUBLISHED_AT.plusSeconds(5)));
 	}
 
 	@Test
@@ -175,7 +196,8 @@ class OutboxPublisherTests {
 	private OutboxPublisher publisher(
 			OutboxPublicationRepository repository,
 			KafkaTemplate<String, Object> kafkaTemplate,
-			Schema schema) {
+			Schema schema,
+			Clock clock) {
 		return new OutboxPublisher(
 				repository,
 				kafkaTemplate,
@@ -183,11 +205,16 @@ class OutboxPublisherTests {
 				new OutboxMessagingConfiguration.SchemaRegistryContract(1),
 				new OutboxMessagingProperties(
 						URI.create("http://localhost:8081"),
-						new OutboxMessagingProperties.Publisher(20, Duration.ofSeconds(1))),
-				Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC));
+						new OutboxMessagingProperties.Publisher(
+								20,
+								Duration.ofSeconds(1),
+								Duration.ofSeconds(60),
+								Duration.ofSeconds(5),
+								Duration.ofSeconds(60))),
+				clock);
 	}
 
-	private OutboxPublication publication(UUID authoritativePaymentId) {
+	private OutboxPublication publication(UUID authoritativePaymentId, int attemptCount) {
 		return new OutboxPublication(
 				MESSAGE_ID,
 				PAYMENT_ID,
@@ -196,6 +223,7 @@ class OutboxPublisherTests {
 				"ExecutePaymentOperation",
 				CORRELATION_ID,
 				null,
-				OCCURRED_AT);
+				OCCURRED_AT,
+				attemptCount);
 	}
 }

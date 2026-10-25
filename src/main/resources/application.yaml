@@ -29,3 +29,6 @@ paymentflow:
       poll-interval: 2s
       batch-max: 20
       delivery-deadline: 30s
+      claim-lease: 60s
+      retry-backoff-initial: 5s
+      retry-backoff-max: 60s

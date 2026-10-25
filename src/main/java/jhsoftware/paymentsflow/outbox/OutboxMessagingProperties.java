@@ -17,7 +17,12 @@ record OutboxMessagingProperties(URI schemaRegistryUrl, Publisher publisher) {
 		}
 	}
 
-	record Publisher(int batchMax, Duration deliveryDeadline) {
+	record Publisher(
+			int batchMax,
+			Duration deliveryDeadline,
+			Duration claimLease,
+			Duration retryBackoffInitial,
+			Duration retryBackoffMax) {
 
 		Publisher {
 			if (batchMax < 1) {
@@ -26,6 +31,21 @@ record OutboxMessagingProperties(URI schemaRegistryUrl, Publisher publisher) {
 			if (deliveryDeadline == null || deliveryDeadline.isNegative() || deliveryDeadline.isZero()) {
 				throw new IllegalArgumentException(
 						"paymentflow.messaging.publisher.delivery-deadline must be positive");
+			}
+			if (claimLease == null || claimLease.isNegative() || claimLease.isZero()) {
+				throw new IllegalArgumentException("paymentflow.messaging.publisher.claim-lease must be positive");
+			}
+			if (claimLease.compareTo(deliveryDeadline) <= 0) {
+				throw new IllegalArgumentException(
+						"paymentflow.messaging.publisher.claim-lease must exceed the delivery deadline");
+			}
+			if (retryBackoffInitial == null || retryBackoffInitial.isNegative() || retryBackoffInitial.isZero()) {
+				throw new IllegalArgumentException(
+						"paymentflow.messaging.publisher.retry-backoff-initial must be positive");
+			}
+			if (retryBackoffMax == null || retryBackoffMax.compareTo(retryBackoffInitial) < 0) {
+				throw new IllegalArgumentException(
+						"paymentflow.messaging.publisher.retry-backoff-max must be at least the initial backoff");
 			}
 		}
 	}

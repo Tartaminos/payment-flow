@@ -11,5 +11,6 @@ record OutboxPublication(
 		String commandType,
 		UUID correlationId,
 		UUID causationId,
-		Instant occurredAt) {
+		Instant occurredAt,
+		int attemptCount) {
 }
