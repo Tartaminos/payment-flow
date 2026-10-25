@@ -17,4 +17,8 @@ record PspAuthorizationOutcome(PspAuthorizationOutcomeType type, String pspRefer
 	static PspAuthorizationOutcome unknown(String reasonCode) {
 		return new PspAuthorizationOutcome(PspAuthorizationOutcomeType.UNKNOWN, null, reasonCode);
 	}
+
+	boolean isDefinitive() {
+		return type != PspAuthorizationOutcomeType.UNKNOWN;
+	}
 }

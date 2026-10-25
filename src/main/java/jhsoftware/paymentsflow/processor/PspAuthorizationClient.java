@@ -2,23 +2,19 @@ package jhsoftware.paymentsflow.processor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
-@Component
-@ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PspAuthorizationClient {
 
 	private static final Logger logger = LoggerFactory.getLogger(PspAuthorizationClient.class);
 
 	private final RestClient restClient;
 
-	PspAuthorizationClient(RestClient pspAuthorizationRestClient) {
-		this.restClient = pspAuthorizationRestClient;
+	PspAuthorizationClient(RestClient restClient) {
+		this.restClient = restClient;
 	}
 
 	PspAuthorizationOutcome authorize(PaymentOperationContext context) {

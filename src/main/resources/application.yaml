@@ -43,4 +43,14 @@ paymentflow:
   processor:
     psp-base-url: ${PSP_SIMULATOR_URL:http://localhost:8081}
     psp-connect-timeout: 3s
-    psp-read-timeout: 10s
+    psp-attempt-read-timeouts: [5s, 10s, 20s]
+    psp-lookup-read-timeout: 3s
+    operation-lease-duration: 120s
+    retry-gap-after-first-attempt: 1s
+    retry-gap-after-second-attempt: 2s
+    reconciliation:
+      poll-interval: 5s
+      batch-size: 20
+      claim-lease: 30s
+      backoff-initial: 5s
+      backoff-max: 60s

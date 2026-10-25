@@ -2,6 +2,7 @@ package jhsoftware.paymentsflow.processor;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -29,10 +30,16 @@ class PaymentOperationProcessingRepository {
 				       po.type AS operation_type,
 				       po.status AS operation_status,
 				       po.amount_minor AS amount_minor,
+				       po.attempt_count AS attempt_count,
+				       po.lease_owner AS lease_owner,
 				       p.id AS payment_id,
 				       p.merchant_id AS merchant_id,
 				       p.currency AS currency,
-				       p.status AS payment_status
+				       p.status AS payment_status,
+				       EXISTS (
+				           SELECT 1 FROM reconciliation_jobs rj
+				           WHERE rj.operation_id = po.id AND rj.resolved_at IS NULL
+				       ) AS has_unresolved_job
 				FROM payment_operations po
 				JOIN payments p ON p.id = po.payment_id
 				WHERE po.id = :operationId
@@ -43,8 +50,170 @@ class PaymentOperationProcessingRepository {
 	}
 
 	@Transactional
+	LeaseClaim claimOrRenewLease(UUID operationId, UUID self, Instant now, Duration leaseDuration) {
+		Optional<LeaseRow> rowOptional = jdbcClient.sql("""
+				SELECT status, lease_owner, lease_until, attempt_count
+				FROM payment_operations
+				WHERE id = :operationId
+				FOR UPDATE
+				""")
+				.param("operationId", operationId)
+				.query((resultSet, rowNumber) -> new LeaseRow(
+						resultSet.getString("status"),
+						resultSet.getObject("lease_owner", UUID.class),
+						resultSet.getObject("lease_until", OffsetDateTime.class),
+						resultSet.getInt("attempt_count")))
+				.optional();
+
+		if (rowOptional.isEmpty()) {
+			return new LeaseClaim(LeaseClaim.Status.NOT_FOUND, 0, null);
+		}
+
+		LeaseRow row = rowOptional.get();
+		if (isFinalizedStatus(row.status())) {
+			return new LeaseClaim(LeaseClaim.Status.FINALIZED, row.attemptCount(), row.leaseOwner());
+		}
+
+		boolean leaseAvailable = row.leaseUntil() == null
+				|| row.leaseUntil().toInstant().isBefore(now)
+				|| self.equals(row.leaseOwner());
+		if (!leaseAvailable) {
+			return new LeaseClaim(LeaseClaim.Status.DENIED, row.attemptCount(), row.leaseOwner());
+		}
+
+		jdbcClient.sql("""
+				UPDATE payment_operations
+				SET lease_owner = :self,
+				    lease_until = :leaseUntil,
+				    updated_at = :now
+				WHERE id = :operationId
+				""")
+				.param("self", self)
+				.param("leaseUntil", databaseTimestamp(now.plus(leaseDuration)))
+				.param("now", databaseTimestamp(now))
+				.param("operationId", operationId)
+				.update();
+
+		return new LeaseClaim(LeaseClaim.Status.ACQUIRED, row.attemptCount(), row.leaseOwner());
+	}
+
+	@Transactional
+	Optional<Integer> reserveAttempt(UUID operationId, UUID self, Instant now, Duration leaseDuration) {
+		return jdbcClient.sql("""
+				UPDATE payment_operations
+				SET attempt_count = attempt_count + 1,
+				    last_attempt_at = :now,
+				    lease_owner = :self,
+				    lease_until = :leaseUntil,
+				    updated_at = :now
+				WHERE id = :operationId
+				  AND lease_owner = :self
+				  AND lease_until > :now
+				  AND attempt_count < 3
+				RETURNING attempt_count
+				""")
+				.param("operationId", operationId)
+				.param("self", self)
+				.param("now", databaseTimestamp(now))
+				.param("leaseUntil", databaseTimestamp(now.plus(leaseDuration)))
+				.query(Integer.class)
+				.optional();
+	}
+
+	@Transactional
 	boolean commitOutcome(UUID operationId, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
-		Optional<Locked> lockedOptional = jdbcClient.sql("""
+		Optional<Locked> lockedOptional = lockOperation(operationId);
+		if (lockedOptional.isEmpty()) {
+			return false;
+		}
+
+		Locked locked = lockedOptional.get();
+		if (isFinalizedStatus(locked.operationStatus())) {
+			return true;
+		}
+
+		OutcomeMapping mapping = applyOutcome(locked, outcome, correlationId, causationId, now);
+		return mapping.ackEligible();
+	}
+
+	boolean applyDefinitiveOutcome(UUID operationId, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
+		Optional<Locked> lockedOptional = lockOperation(operationId);
+		if (lockedOptional.isEmpty()) {
+			return false;
+		}
+
+		Locked locked = lockedOptional.get();
+		if (isFinalizedStatus(locked.operationStatus())) {
+			return true;
+		}
+
+		applyOutcome(locked, outcome, correlationId, causationId, now);
+		return true;
+	}
+
+	@Transactional
+	boolean commitUnknownWithReconciliationJob(
+			UUID operationId, String reasonCode, UUID correlationId, UUID causationId, Instant now) {
+		Optional<Locked> lockedOptional = lockOperation(operationId);
+		if (lockedOptional.isEmpty()) {
+			return false;
+		}
+
+		Locked locked = lockedOptional.get();
+		if (isFinalizedStatus(locked.operationStatus())) {
+			return true;
+		}
+
+		boolean alreadyUnknown = locked.operationStatus().equals("UNKNOWN");
+
+		jdbcClient.sql("""
+				UPDATE payment_operations
+				SET status = 'UNKNOWN',
+				    psp_result_code = :pspResultCode,
+				    unknown_since = COALESCE(unknown_since, :now),
+				    lease_owner = NULL,
+				    lease_until = NULL,
+				    updated_at = :now
+				WHERE id = :operationId
+				""")
+				.param("pspResultCode", reasonCode)
+				.param("now", databaseTimestamp(now))
+				.param("operationId", operationId)
+				.update();
+
+		if (!alreadyUnknown) {
+			long sequenceNumber = nextAuditSequence(locked.paymentId());
+			insertAuditEvent(
+					locked.paymentId(),
+					operationId,
+					"PAYMENT_OPERATION",
+					"PAYMENT_OPERATION_UNKNOWN",
+					locked.operationStatus(),
+					"UNKNOWN",
+					reasonCode,
+					correlationId,
+					causationId,
+					sequenceNumber,
+					now);
+		}
+
+		jdbcClient.sql("""
+				INSERT INTO reconciliation_jobs
+				    (id, operation_id, unknown_since, next_check_at, attempts, created_at, updated_at)
+				VALUES
+				    (:id, :operationId, :now, :now, 0, :now, :now)
+				ON CONFLICT (operation_id) DO NOTHING
+				""")
+				.param("id", UUID.randomUUID())
+				.param("operationId", operationId)
+				.param("now", databaseTimestamp(now))
+				.update();
+
+		return true;
+	}
+
+	private Optional<Locked> lockOperation(UUID operationId) {
+		return jdbcClient.sql("""
 				SELECT po.id AS operation_id,
 				       po.status AS operation_status,
 				       p.id AS payment_id,
@@ -61,16 +230,10 @@ class PaymentOperationProcessingRepository {
 						resultSet.getObject("payment_id", UUID.class),
 						resultSet.getString("payment_status")))
 				.optional();
+	}
 
-		if (lockedOptional.isEmpty()) {
-			return false;
-		}
-
-		Locked locked = lockedOptional.get();
-		if (isFinalizedStatus(locked.operationStatus())) {
-			return true;
-		}
-
+	private OutcomeMapping applyOutcome(
+			Locked locked, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
 		OutcomeMapping mapping = OutcomeMapping.forOutcome(outcome, now);
 
 		jdbcClient.sql("""
@@ -81,6 +244,8 @@ class PaymentOperationProcessingRepository {
 				    error_code = :errorCode,
 				    completed_at = :completedAt,
 				    unknown_since = :unknownSince,
+				    lease_owner = NULL,
+				    lease_until = NULL,
 				    updated_at = :now
 				WHERE id = :operationId
 				""")
@@ -91,13 +256,13 @@ class PaymentOperationProcessingRepository {
 				.param("completedAt", mapping.completedAt() == null ? null : databaseTimestamp(mapping.completedAt()))
 				.param("unknownSince", mapping.unknownSince() == null ? null : databaseTimestamp(mapping.unknownSince()))
 				.param("now", databaseTimestamp(now))
-				.param("operationId", operationId)
+				.param("operationId", locked.operationId())
 				.update();
 
 		long sequenceNumber = nextAuditSequence(locked.paymentId());
 		insertAuditEvent(
 				locked.paymentId(),
-				operationId,
+				locked.operationId(),
 				"PAYMENT_OPERATION",
 				"PAYMENT_OPERATION_" + mapping.newOperationStatus(),
 				locked.operationStatus(),
@@ -123,7 +288,7 @@ class PaymentOperationProcessingRepository {
 
 			insertAuditEvent(
 					locked.paymentId(),
-					operationId,
+					locked.operationId(),
 					"PAYMENT",
 					"PAYMENT_" + mapping.newPaymentStatus(),
 					locked.paymentStatus(),
@@ -135,7 +300,7 @@ class PaymentOperationProcessingRepository {
 					now);
 		}
 
-		return mapping.ackEligible();
+		return mapping;
 	}
 
 	private long nextAuditSequence(UUID paymentId) {
@@ -197,7 +362,10 @@ class PaymentOperationProcessingRepository {
 				resultSet.getString("currency"),
 				resultSet.getObject("payment_id", UUID.class),
 				resultSet.getObject("merchant_id", UUID.class),
-				resultSet.getString("payment_status"));
+				resultSet.getString("payment_status"),
+				resultSet.getInt("attempt_count"),
+				resultSet.getObject("lease_owner", UUID.class),
+				resultSet.getBoolean("has_unresolved_job"));
 	}
 
 	private OffsetDateTime databaseTimestamp(Instant instant) {
@@ -205,5 +373,22 @@ class PaymentOperationProcessingRepository {
 	}
 
 	private record Locked(UUID operationId, String operationStatus, UUID paymentId, String paymentStatus) {
+	}
+
+	private record LeaseRow(String status, UUID leaseOwner, OffsetDateTime leaseUntil, int attemptCount) {
+	}
+
+	record LeaseClaim(Status status, int attemptCount, UUID previousOwner) {
+
+		enum Status {
+			NOT_FOUND, FINALIZED, DENIED, ACQUIRED
+		}
+
+		boolean isTakeover(UUID self) {
+			return status == Status.ACQUIRED
+					&& previousOwner != null
+					&& !previousOwner.equals(self)
+					&& attemptCount > 0;
+		}
 	}
 }

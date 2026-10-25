@@ -2,9 +2,11 @@ package jhsoftware.paymentsflow.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.zaxxer.hikari.HikariConfig;
@@ -56,6 +58,7 @@ class PaymentOperationProcessingRepositoryTests {
 	@AfterEach
 	void cleanDatabase() {
 		jdbcClient.sql("DELETE FROM payment_audit_events").update();
+		jdbcClient.sql("DELETE FROM reconciliation_jobs").update();
 		jdbcClient.sql("DELETE FROM payment_operations").update();
 		jdbcClient.sql("DELETE FROM payments").update();
 	}
@@ -169,6 +172,136 @@ class PaymentOperationProcessingRepositoryTests {
 		assertThat(context.operationStatus()).isEqualTo("PENDING");
 		assertThat(context.amountMinor()).isEqualTo(50000L);
 		assertThat(context.currency()).isEqualTo("BRL");
+	}
+
+	@Test
+	void reserveAttemptEnforcesThreeAttemptBudget() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PENDING", "CREATED");
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, self, now.plus(Duration.ofSeconds(120)));
+
+		assertThat(repository.reserveAttempt(operationId, self, now, Duration.ofSeconds(120))).contains(1);
+		assertThat(repository.reserveAttempt(operationId, self, now, Duration.ofSeconds(120))).contains(2);
+		assertThat(repository.reserveAttempt(operationId, self, now, Duration.ofSeconds(120))).contains(3);
+		assertThat(repository.reserveAttempt(operationId, self, now, Duration.ofSeconds(120))).isEmpty();
+		assertThat(attemptCount(operationId)).isEqualTo(3);
+	}
+
+	@Test
+	void reserveAttemptFailsWhenLeaseIsNotOwnedBySelf() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PENDING", "CREATED");
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, UUID.randomUUID(), now.plus(Duration.ofSeconds(120)));
+
+		Optional<Integer> reserved = repository.reserveAttempt(operationId, UUID.randomUUID(), now, Duration.ofSeconds(120));
+
+		assertThat(reserved).isEmpty();
+	}
+
+	@Test
+	void claimOrRenewLeaseCannotStealALiveLease() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID currentOwner = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PROCESSING", "CREATED");
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, currentOwner, now.plus(Duration.ofSeconds(60)));
+
+		PaymentOperationProcessingRepository.LeaseClaim claim =
+				repository.claimOrRenewLease(operationId, UUID.randomUUID(), now, Duration.ofSeconds(120));
+
+		assertThat(claim.status()).isEqualTo(PaymentOperationProcessingRepository.LeaseClaim.Status.DENIED);
+	}
+
+	@Test
+	void claimOrRenewLeaseCanTakeOverAnExpiredLeaseAndReportsThePreviousOwner() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID previousOwner = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PROCESSING", "CREATED");
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, previousOwner, now.minus(Duration.ofSeconds(10)));
+		jdbcClient.sql("UPDATE payment_operations SET attempt_count = 1 WHERE id = :id")
+				.param("id", operationId)
+				.update();
+
+		PaymentOperationProcessingRepository.LeaseClaim claim =
+				repository.claimOrRenewLease(operationId, self, now, Duration.ofSeconds(120));
+
+		assertThat(claim.status()).isEqualTo(PaymentOperationProcessingRepository.LeaseClaim.Status.ACQUIRED);
+		assertThat(claim.previousOwner()).isEqualTo(previousOwner);
+		assertThat(claim.isTakeover(self)).isTrue();
+	}
+
+	@Test
+	void commitUnknownWithReconciliationJobAtomicallyPersistsOperationAuditAndJob() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PENDING", "CREATED");
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, UUID.randomUUID(), now.plus(Duration.ofSeconds(120)));
+
+		boolean ackEligible = repository.commitUnknownWithReconciliationJob(
+				operationId, "PSP_ATTEMPTS_EXHAUSTED", UUID.randomUUID(), null, now);
+
+		assertThat(ackEligible).isTrue();
+		assertThat(operationStatus(operationId)).isEqualTo("UNKNOWN");
+		assertThat(paymentStatus(paymentId)).isEqualTo("CREATED");
+		assertThat(auditEventTypesInOrder(paymentId)).containsExactly("PAYMENT_OPERATION_UNKNOWN");
+		assertThat(leaseOwner(operationId)).isNull();
+		assertThat(reconciliationJobCount(operationId)).isEqualTo(1);
+	}
+
+	@Test
+	void commitUnknownWithReconciliationJobIsIdempotentForAnAlreadyUnknownOperation() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PENDING", "CREATED");
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+
+		repository.commitUnknownWithReconciliationJob(operationId, "PSP_UNREACHABLE", UUID.randomUUID(), null, now);
+		boolean secondAckEligible = repository.commitUnknownWithReconciliationJob(
+				operationId, "PSP_UNREACHABLE", UUID.randomUUID(), null, now.plusSeconds(5));
+
+		assertThat(secondAckEligible).isTrue();
+		assertThat(auditEventTypesInOrder(paymentId)).containsExactly("PAYMENT_OPERATION_UNKNOWN");
+		assertThat(reconciliationJobCount(operationId)).isEqualTo(1);
+	}
+
+	private void setLease(UUID operationId, UUID owner, Instant until) {
+		jdbcClient.sql("UPDATE payment_operations SET lease_owner = :owner, lease_until = :until WHERE id = :id")
+				.param("owner", owner)
+				.param("until", until.atOffset(ZoneOffset.UTC))
+				.param("id", operationId)
+				.update();
+	}
+
+	private int attemptCount(UUID operationId) {
+		return jdbcClient.sql("SELECT attempt_count FROM payment_operations WHERE id = :id")
+				.param("id", operationId)
+				.query(Integer.class)
+				.single();
+	}
+
+	private UUID leaseOwner(UUID operationId) {
+		return jdbcClient.sql("SELECT lease_owner FROM payment_operations WHERE id = :id")
+				.param("id", operationId)
+				.query(UUID.class)
+				.optional()
+				.orElse(null);
+	}
+
+	private long reconciliationJobCount(UUID operationId) {
+		return jdbcClient.sql("SELECT COUNT(*) FROM reconciliation_jobs WHERE operation_id = :id")
+				.param("id", operationId)
+				.query(Long.class)
+				.single();
 	}
 
 	private void seedPaymentAndOperation(

@@ -1,5 +1,9 @@
 package jhsoftware.paymentsflow.processor;
 
+import java.net.URI;
+import java.time.Duration;
+import java.util.List;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -32,12 +36,24 @@ class PaymentOperationConsumerConfiguration {
 	}
 
 	@Bean
-	RestClient pspAuthorizationRestClient(ProcessorProperties properties) {
+	List<PspAuthorizationClient> pspAuthorizationAttemptClients(ProcessorProperties properties) {
+		return properties.pspAttemptReadTimeouts().stream()
+				.map(readTimeout -> new PspAuthorizationClient(
+						buildRestClient(properties.pspBaseUrl(), properties.pspConnectTimeout(), readTimeout)))
+				.toList();
+	}
+
+	@Bean
+	RestClient pspLookupRestClient(ProcessorProperties properties) {
+		return buildRestClient(properties.pspBaseUrl(), properties.pspConnectTimeout(), properties.pspLookupReadTimeout());
+	}
+
+	private RestClient buildRestClient(URI baseUrl, Duration connectTimeout, Duration readTimeout) {
 		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-		requestFactory.setConnectTimeout(properties.pspConnectTimeout());
-		requestFactory.setReadTimeout(properties.pspReadTimeout());
+		requestFactory.setConnectTimeout(connectTimeout);
+		requestFactory.setReadTimeout(readTimeout);
 		return RestClient.builder()
-				.baseUrl(properties.pspBaseUrl().toString())
+				.baseUrl(baseUrl.toString())
 				.requestFactory(requestFactory)
 				.build();
 	}

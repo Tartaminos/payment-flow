@@ -1,6 +1,5 @@
 package jhsoftware.paymentsflow.processor;
 
-import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,18 +17,15 @@ class PaymentOperationProcessor {
 
 	private final PaymentOperationCommandDecoder decoder;
 	private final PaymentOperationProcessingRepository repository;
-	private final PspAuthorizationClient pspClient;
-	private final Clock clock;
+	private final PaymentOperationAttemptExecutor attemptExecutor;
 
 	PaymentOperationProcessor(
 			PaymentOperationCommandDecoder decoder,
 			PaymentOperationProcessingRepository repository,
-			PspAuthorizationClient pspClient,
-			Clock clock) {
+			PaymentOperationAttemptExecutor attemptExecutor) {
 		this.decoder = decoder;
 		this.repository = repository;
-		this.pspClient = pspClient;
-		this.clock = clock;
+		this.attemptExecutor = attemptExecutor;
 	}
 
 	boolean process(String recordKey, GenericRecord recordValue) {
@@ -62,6 +58,10 @@ class PaymentOperationProcessor {
 			return true;
 		}
 
+		if (context.isUnknownAwaitingReconciliation()) {
+			return true;
+		}
+
 		if (!"AUTHORIZE".equals(context.operationType())) {
 			logger.error(
 					"Operation {} has unsupported type {} for the authorization processor; withholding acknowledgment",
@@ -70,13 +70,7 @@ class PaymentOperationProcessor {
 			return false;
 		}
 
-		PspAuthorizationOutcome outcome = pspClient.authorize(context);
-		return repository.commitOutcome(
-				command.operationId(),
-				outcome,
-				command.correlationId(),
-				command.causationId(),
-				clock.instant());
+		return attemptExecutor.execute(context, command.correlationId(), command.causationId());
 	}
 
 	private UUID parsePaymentId(String recordKey) {

@@ -19,7 +19,8 @@ import org.springframework.web.client.RestClient;
 class PspAuthorizationClientTests {
 
 	private static final PaymentOperationContext CONTEXT = new PaymentOperationContext(
-			UUID.randomUUID(), "AUTHORIZE", "PENDING", 50000L, "BRL", UUID.randomUUID(), UUID.randomUUID(), "CREATED");
+			UUID.randomUUID(), "AUTHORIZE", "PENDING", 50000L, "BRL", UUID.randomUUID(), UUID.randomUUID(), "CREATED",
+			0, null, false);
 
 	@Test
 	void succeededResponseYieldsSucceededOutcomeWithPspReference() {
