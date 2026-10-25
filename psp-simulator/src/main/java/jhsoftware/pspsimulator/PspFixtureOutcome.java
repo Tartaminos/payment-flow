@@ -1,0 +1,10 @@
+package jhsoftware.pspsimulator;
+
+enum PspFixtureOutcome {
+	APPROVED,
+	DECLINED,
+	NON_EXECUTED,
+	PROCESSING,
+	FAULT_COMMITTED_REPLY_DROPPED,
+	FAULT_UNPROCESSED
+}

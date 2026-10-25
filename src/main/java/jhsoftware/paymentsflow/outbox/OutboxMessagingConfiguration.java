@@ -22,10 +22,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableConfigurationProperties(OutboxMessagingProperties.class)
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
-class OutboxMessagingConfiguration {
+public class OutboxMessagingConfiguration {
 
-	static final String TOPIC = "payment.operations.requested.v1";
-	static final String SUBJECT = "com.paymentflow.commands.ExecutePaymentOperation";
+	public static final String TOPIC = "payment.operations.requested.v1";
+	public static final String SUBJECT = "com.paymentflow.commands.ExecutePaymentOperation";
 	static final String COMPATIBILITY = "FULL_TRANSITIVE";
 
 	@Bean

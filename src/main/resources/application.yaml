@@ -15,16 +15,24 @@ spring:
         request.timeout.ms: 10000
         delivery.timeout.ms: 30000
         max.block.ms: 30000
-        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8082}
         auto.register.schemas: false
         use.latest.version: false
         value.subject.name.strategy: io.confluent.kafka.serializers.subject.RecordNameStrategy
+    consumer:
+      group-id: paymentflow-processor-v1
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      properties:
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8082}
+        specific.avro.reader: false
 
 paymentflow:
   merchant-id: 550e8400-e29b-41d4-a716-446655440000
   messaging:
     enabled: false
-    schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+    schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8082}
     publisher:
       poll-interval: 2s
       batch-max: 20
@@ -32,3 +40,7 @@ paymentflow:
       claim-lease: 60s
       retry-backoff-initial: 5s
       retry-backoff-max: 60s
+  processor:
+    psp-base-url: ${PSP_SIMULATOR_URL:http://localhost:8081}
+    psp-connect-timeout: 3s
+    psp-read-timeout: 10s

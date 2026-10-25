@@ -54,9 +54,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @SpringBootTest(properties = {
 		"spring.docker.compose.enabled=false",
 		"spring.kafka.bootstrap-servers=localhost:9092",
-		"spring.kafka.producer.properties.schema.registry.url=http://localhost:8081",
+		"spring.kafka.producer.properties.schema.registry.url=http://localhost:8082",
 		"paymentflow.messaging.enabled=true",
-		"paymentflow.messaging.schema-registry-url=http://localhost:8081",
+		"paymentflow.messaging.schema-registry-url=http://localhost:8082",
 		"paymentflow.messaging.publisher.poll-interval=1h"
 })
 @AutoConfigureMockMvc
@@ -240,7 +240,7 @@ class OutboxRealMessagingIntegrationTests {
 		properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 		properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 		properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class);
-		properties.put("schema.registry.url", "http://localhost:8081");
+		properties.put("schema.registry.url", "http://localhost:8082");
 		return new KafkaConsumer<>(properties);
 	}
 

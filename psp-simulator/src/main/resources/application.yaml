@@ -1,0 +1,13 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: psp-simulator
+  datasource:
+    url: jdbc:postgresql://localhost:5432/paymentflow_psp_sim
+    username: myuser
+    password: secret
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
