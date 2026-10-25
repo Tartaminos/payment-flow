@@ -28,6 +28,18 @@ class PaymentAdmissionService {
 
 	@Transactional
 	CreatePaymentResponse admit(PaymentAdmissionCommand command) {
+		String requestHash = requestHasher.hash(command);
+		repository.lockIdempotencyScope(properties.merchantId(), command.idempotencyKey());
+
+		var existingAdmission = repository.findExistingAdmission(
+				properties.merchantId(), command.idempotencyKey());
+		if (existingAdmission.isPresent()) {
+			if (!existingAdmission.get().requestHash().equals(requestHash)) {
+				throw new IdempotencyKeyConflictException();
+			}
+			return existingAdmission.get().response();
+		}
+
 		UUID paymentId = UUID.randomUUID();
 		UUID operationId = UUID.randomUUID();
 		UUID idempotencyId = UUID.randomUUID();
@@ -35,7 +47,6 @@ class PaymentAdmissionService {
 		UUID messageId = UUID.randomUUID();
 		UUID correlationId = UUID.randomUUID();
 		Instant admittedAt = clock.instant();
-		String requestHash = requestHasher.hash(command);
 
 		repository.insertPayment(paymentId, properties.merchantId(), command, admittedAt);
 		repository.insertOperation(operationId, paymentId, command.amountMinor(), admittedAt);

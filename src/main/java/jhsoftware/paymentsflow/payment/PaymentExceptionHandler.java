@@ -22,6 +22,9 @@ class PaymentExceptionHandler {
 	private static final ApiError INVALID_REQUEST = new ApiError(
 			"INVALID_PAYMENT_REQUEST",
 			"The payment request is invalid.");
+	private static final ApiError IDEMPOTENCY_KEY_CONFLICT = new ApiError(
+			"IDEMPOTENCY_KEY_CONFLICT",
+			"The idempotency key is already used for different payment details.");
 
 	@ExceptionHandler({
 			InvalidPaymentRequestException.class,
@@ -35,12 +38,16 @@ class PaymentExceptionHandler {
 		return ResponseEntity.badRequest().body(INVALID_REQUEST);
 	}
 
+	@ExceptionHandler(IdempotencyKeyConflictException.class)
+	ResponseEntity<ApiError> idempotencyConflict() {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(IDEMPOTENCY_KEY_CONFLICT);
+	}
+
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	ResponseEntity<ApiError> dataIntegrity(DataIntegrityViolationException exception) {
 		if (causedByConstraint(exception, "uk_idempotency_keys_scope")) {
-			return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
-					"IDEMPOTENCY_KEY_CONFLICT",
-					"The idempotency key has already been used."));
+			logger.error("Payment admission failed because the idempotency uniqueness constraint was violated");
+			return internalServerError();
 		}
 		logger.error("Payment admission failed because a database constraint was violated", exception);
 		return internalServerError();

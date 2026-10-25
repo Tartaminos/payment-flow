@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -16,6 +17,45 @@ class PaymentAdmissionRepository {
 
 	PaymentAdmissionRepository(JdbcClient jdbcClient) {
 		this.jdbcClient = jdbcClient;
+	}
+
+	void lockIdempotencyScope(UUID merchantId, String idempotencyKey) {
+		jdbcClient.sql("""
+				SELECT 1
+				FROM pg_advisory_xact_lock(hashtextextended(
+				    CAST(:merchantId AS text) || ':' || 'PAYMENT_CREATE' || ':' || :idempotencyKey,
+				    0))
+				""")
+				.param("merchantId", merchantId)
+				.param("idempotencyKey", idempotencyKey)
+				.query(Integer.class)
+				.single();
+	}
+
+	Optional<ExistingAdmission> findExistingAdmission(UUID merchantId, String idempotencyKey) {
+		return jdbcClient.sql("""
+				SELECT ik.request_hash,
+				       ik.payment_id,
+				       ik.payment_operation_id,
+				       p.status AS payment_status,
+				       po.status AS operation_status
+				FROM idempotency_keys ik
+				JOIN payments p ON p.id = ik.payment_id
+				JOIN payment_operations po ON po.id = ik.payment_operation_id
+				WHERE ik.merchant_id = :merchantId
+				  AND ik.operation_scope = 'PAYMENT_CREATE'
+				  AND ik.key = :idempotencyKey
+				""")
+				.param("merchantId", merchantId)
+				.param("idempotencyKey", idempotencyKey)
+				.query((resultSet, rowNumber) -> new ExistingAdmission(
+						resultSet.getString("request_hash"),
+						new CreatePaymentResponse(
+								resultSet.getObject("payment_id", UUID.class),
+								resultSet.getObject("payment_operation_id", UUID.class),
+								resultSet.getString("payment_status"),
+								resultSet.getString("operation_status"))))
+				.optional();
 	}
 
 	void insertPayment(UUID paymentId, UUID merchantId, PaymentAdmissionCommand command, Instant admittedAt) {
@@ -122,5 +162,8 @@ class PaymentAdmissionRepository {
 
 	private OffsetDateTime databaseTimestamp(Instant instant) {
 		return instant.atOffset(ZoneOffset.UTC);
+	}
+
+	record ExistingAdmission(String requestHash, CreatePaymentResponse response) {
 	}
 }

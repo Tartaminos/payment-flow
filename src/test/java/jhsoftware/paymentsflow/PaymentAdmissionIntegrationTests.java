@@ -5,6 +5,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,9 +29,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -203,10 +211,61 @@ class PaymentAdmissionIntegrationTests {
 	}
 
 	@Test
-	void concurrentDuplicateKeyCommitsOnlyOneCompleteGraph() throws Exception {
+	void equivalentReplayReturnsOriginalIdentityAndCurrentStatusesWithoutAdditionalWrites() throws Exception {
+		MvcResult original = performPayment("replay-key", VALID_BODY)
+				.andExpect(status().isAccepted())
+				.andReturn();
+		String originalPaymentId = JsonPath.read(original.getResponse().getContentAsString(), "$.paymentId");
+		String originalOperationId = JsonPath.read(original.getResponse().getContentAsString(), "$.operationId");
+
+		jdbcTemplate.update("UPDATE payments SET status = 'AUTHORIZED' WHERE id = ?", UUID.fromString(originalPaymentId));
+		jdbcTemplate.update(
+				"UPDATE payment_operations SET status = 'PROCESSING' WHERE id = ?",
+				UUID.fromString(originalOperationId));
+
+		performPayment("replay-key", """
+				{"currency":"BRL", "amount":50000, "orderId":"150"}
+				""")
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.paymentId").value(originalPaymentId))
+				.andExpect(jsonPath("$.operationId").value(originalOperationId))
+				.andExpect(jsonPath("$.status").value("AUTHORIZED"))
+				.andExpect(jsonPath("$.operationStatus").value("PROCESSING"));
+
+		assertTableCounts(1);
+	}
+
+	@ParameterizedTest(name = "rejects same idempotency key with different {0}")
+	@MethodSource("conflictingBodies")
+	void conflictingReplayReturnsExactConflictAndPreservesOriginal(String field, String conflictingBody) throws Exception {
+		performPayment("conflict-key", VALID_BODY)
+				.andExpect(status().isAccepted());
+
+		performPayment("conflict-key", conflictingBody)
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"))
+				.andExpect(jsonPath("$.message").value(
+						"The idempotency key is already used for different payment details."));
+
+		assertTableCounts(1);
+		assertThat(jdbcTemplate.queryForMap("SELECT external_order_id, amount_minor, currency FROM payments"))
+				.containsEntry("external_order_id", "150")
+				.containsEntry("amount_minor", 50_000L)
+				.containsEntry("currency", "BRL");
+	}
+
+	static Stream<Arguments> conflictingBodies() {
+		return Stream.of(
+				Arguments.of("order ID", "{\"orderId\":\"151\",\"amount\":50000,\"currency\":\"BRL\"}"),
+				Arguments.of("amount", "{\"orderId\":\"150\",\"amount\":50001,\"currency\":\"BRL\"}"),
+				Arguments.of("currency", "{\"orderId\":\"150\",\"amount\":50000,\"currency\":\"USD\"}"));
+	}
+
+	@Test
+	void concurrentEquivalentRequestsBothResolveToOneCompleteGraph() throws Exception {
 		CountDownLatch ready = new CountDownLatch(2);
 		CountDownLatch start = new CountDownLatch(1);
-		List<Future<Integer>> responses = new ArrayList<>();
+		List<Future<MvcResult>> responses = new ArrayList<>();
 
 		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
 			for (int index = 0; index < 2; index++) {
@@ -214,14 +273,89 @@ class PaymentAdmissionIntegrationTests {
 					ready.countDown();
 					start.await();
 					return performPayment("competing-key", VALID_BODY)
-							.andReturn().getResponse().getStatus();
+							.andReturn();
 				}));
 			}
 
 			ready.await();
 			start.countDown();
-			List<Integer> statuses = responses.stream().map(this::get).sorted().toList();
-			assertThat(statuses).containsExactly(202, 409);
+			List<MvcResult> results = responses.stream().map(this::get).toList();
+			assertThat(results).extracting(result -> result.getResponse().getStatus())
+					.containsExactly(202, 202);
+			assertThat(results).extracting(this::responseIdentity).containsOnly(responseIdentity(results.getFirst()));
+		}
+
+		assertTableCounts(1);
+	}
+
+	@Test
+	void concurrentDifferentRequestsProduceOneWinnerAndOneConflict() throws Exception {
+		CountDownLatch ready = new CountDownLatch(2);
+		CountDownLatch start = new CountDownLatch(1);
+		List<String> bodies = List.of(
+				VALID_BODY,
+				"{\"orderId\":\"other-order\",\"amount\":70000,\"currency\":\"USD\"}");
+		List<Future<MvcResult>> responses = new ArrayList<>();
+
+		try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+			for (String body : bodies) {
+				responses.add(executor.submit(() -> {
+					ready.countDown();
+					start.await();
+					return performPayment("different-competing-key", body).andReturn();
+				}));
+			}
+
+			ready.await();
+			start.countDown();
+			List<MvcResult> results = responses.stream().map(this::get).toList();
+			assertThat(results).extracting(result -> result.getResponse().getStatus())
+					.containsExactlyInAnyOrder(202, 409);
+			MvcResult conflict = results.stream()
+					.filter(result -> result.getResponse().getStatus() == 409)
+					.findFirst()
+					.orElseThrow();
+			assertThat(JsonPath.<String>read(conflict.getResponse().getContentAsString(), "$.code"))
+					.isEqualTo("IDEMPOTENCY_KEY_CONFLICT");
+			MvcResult accepted = results.stream()
+					.filter(result -> result.getResponse().getStatus() == 202)
+					.findFirst()
+					.orElseThrow();
+			assertThat(jdbcTemplate.queryForObject("SELECT id::text FROM payments", String.class))
+					.isEqualTo(JsonPath.<String>read(accepted.getResponse().getContentAsString(), "$.paymentId"));
+		}
+
+		assertTableCounts(1);
+	}
+
+	@Test
+	void replayFromFreshApplicationContextUsesPersistedAdmission() throws Exception {
+		MvcResult original = performPayment("restart-key", VALID_BODY)
+				.andExpect(status().isAccepted())
+				.andReturn();
+		String originalIdentity = responseIdentity(original);
+
+		try (ConfigurableApplicationContext restarted = new SpringApplicationBuilder(PaymentsflowApplication.class)
+				.web(WebApplicationType.SERVLET)
+				.properties(
+						"server.port=0",
+						"spring.docker.compose.enabled=false",
+						"spring.datasource.url=" + postgres.getJdbcUrl(),
+						"spring.datasource.username=" + postgres.getUsername(),
+						"spring.datasource.password=" + postgres.getPassword())
+				.run()) {
+			int port = restarted.getEnvironment().getRequiredProperty("local.server.port", Integer.class);
+			HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/payments"))
+					.header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+					.header("Idempotency-Key", "restart-key")
+					.POST(HttpRequest.BodyPublishers.ofString(VALID_BODY))
+					.build();
+
+			HttpResponse<String> replay = HttpClient.newHttpClient()
+					.send(request, HttpResponse.BodyHandlers.ofString());
+
+			assertThat(replay.statusCode()).isEqualTo(202);
+			assertThat(responseIdentity(replay.body())).isEqualTo(originalIdentity);
 		}
 
 		assertTableCounts(1);
@@ -259,13 +393,21 @@ class PaymentAdmissionIntegrationTests {
 		}
 	}
 
-	private Integer get(Future<Integer> future) {
+	private <T> T get(Future<T> future) {
 		try {
 			return future.get();
 		}
 		catch (Exception exception) {
 			throw new AssertionError("Concurrent request did not complete", exception);
 		}
+	}
+
+	private String responseIdentity(MvcResult result) {
+		return responseIdentity(new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8));
+	}
+
+	private String responseIdentity(String body) {
+		return JsonPath.<String>read(body, "$.paymentId") + ":" + JsonPath.<String>read(body, "$.operationId");
 	}
 
 	private void installOutboxFailureTrigger() {
