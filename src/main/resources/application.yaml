@@ -4,6 +4,28 @@ spring:
   jackson:
     deserialization:
       fail-on-unknown-properties: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        request.timeout.ms: 10000
+        delivery.timeout.ms: 30000
+        max.block.ms: 30000
+        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+        auto.register.schemas: false
+        use.latest.version: false
+        value.subject.name.strategy: io.confluent.kafka.serializers.subject.RecordNameStrategy
 
 paymentflow:
   merchant-id: 550e8400-e29b-41d4-a716-446655440000
+  messaging:
+    enabled: false
+    schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8081}
+    publisher:
+      poll-interval: 2s
+      batch-max: 20
+      delivery-deadline: 30s

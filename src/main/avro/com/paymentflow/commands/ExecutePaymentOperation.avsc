@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "ExecutePaymentOperation",
+  "namespace": "com.paymentflow.commands",
+  "fields": [
+    {"name": "messageId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "commandType", "type": "string"},
+    {"name": "operationId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "correlationId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "occurredAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "causationId", "type": ["null", {"type": "string", "logicalType": "uuid"}], "default": null}
+  ]
+}
