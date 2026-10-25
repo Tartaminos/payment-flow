@@ -1,3 +1,9 @@
 spring:
   application:
     name: paymentsflow
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+paymentflow:
+  merchant-id: 550e8400-e29b-41d4-a716-446655440000
