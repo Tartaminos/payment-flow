@@ -57,7 +57,8 @@ class ReconciliationJobRepository {
 	boolean resolveJob(
 			UUID jobId, UUID self, UUID operationId, PspAuthorizationOutcome outcome,
 			UUID correlationId, UUID causationId, Instant now) {
-		boolean applied = operationRepository.applyDefinitiveOutcome(operationId, outcome, correlationId, causationId, now);
+		boolean applied =
+				operationRepository.applyDefinitiveOutcome(operationId, self, outcome, correlationId, causationId, now);
 		if (!applied) {
 			return false;
 		}

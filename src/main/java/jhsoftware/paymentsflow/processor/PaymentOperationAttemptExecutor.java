@@ -69,7 +69,8 @@ class PaymentOperationAttemptExecutor {
 		if (claim.isTakeover(self)) {
 			PspAuthorizationOutcome lookupOutcome = lookupClient.lookup(context.operationId());
 			if (lookupOutcome.isDefinitive()) {
-				return repository.commitOutcome(context.operationId(), lookupOutcome, correlationId, causationId, clock.instant());
+				return repository.commitOutcome(
+						context.operationId(), self, lookupOutcome, correlationId, causationId, clock.instant());
 			}
 			lastReasonCode = lookupOutcome.reasonCode();
 		}
@@ -83,7 +84,8 @@ class PaymentOperationAttemptExecutor {
 			int attemptNumber = reserved.get();
 			PspAuthorizationOutcome outcome = attemptClients.get(attemptNumber - 1).authorize(context);
 			if (outcome.isDefinitive()) {
-				return repository.commitOutcome(context.operationId(), outcome, correlationId, causationId, clock.instant());
+				return repository.commitOutcome(
+						context.operationId(), self, outcome, correlationId, causationId, clock.instant());
 			}
 
 			attemptsUsed = attemptNumber;
@@ -94,7 +96,7 @@ class PaymentOperationAttemptExecutor {
 		}
 
 		return repository.commitUnknownWithReconciliationJob(
-				context.operationId(), lastReasonCode, correlationId, causationId, clock.instant());
+				context.operationId(), self, lastReasonCode, correlationId, causationId, clock.instant());
 	}
 
 	private Duration gapAfter(int attemptNumber) {

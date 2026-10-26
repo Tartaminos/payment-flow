@@ -121,7 +121,8 @@ class PaymentOperationProcessingRepository {
 	}
 
 	@Transactional
-	boolean commitOutcome(UUID operationId, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
+	boolean commitOutcome(
+			UUID operationId, UUID self, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
 		Optional<Locked> lockedOptional = lockOperation(operationId);
 		if (lockedOptional.isEmpty()) {
 			return false;
@@ -132,11 +133,13 @@ class PaymentOperationProcessingRepository {
 			return true;
 		}
 
-		OutcomeMapping mapping = applyOutcome(locked, outcome, correlationId, causationId, now);
-		return mapping.ackEligible();
+		return applyOutcome(locked, outcome, correlationId, causationId, now, self)
+				.map(OutcomeMapping::ackEligible)
+				.orElse(false);
 	}
 
-	boolean applyDefinitiveOutcome(UUID operationId, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
+	boolean applyDefinitiveOutcome(
+			UUID operationId, UUID self, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
 		Optional<Locked> lockedOptional = lockOperation(operationId);
 		if (lockedOptional.isEmpty()) {
 			return false;
@@ -147,13 +150,12 @@ class PaymentOperationProcessingRepository {
 			return true;
 		}
 
-		applyOutcome(locked, outcome, correlationId, causationId, now);
-		return true;
+		return applyOutcome(locked, outcome, correlationId, causationId, now, self).isPresent();
 	}
 
 	@Transactional
 	boolean commitUnknownWithReconciliationJob(
-			UUID operationId, String reasonCode, UUID correlationId, UUID causationId, Instant now) {
+			UUID operationId, UUID self, String reasonCode, UUID correlationId, UUID causationId, Instant now) {
 		Optional<Locked> lockedOptional = lockOperation(operationId);
 		if (lockedOptional.isEmpty()) {
 			return false;
@@ -166,7 +168,7 @@ class PaymentOperationProcessingRepository {
 
 		boolean alreadyUnknown = locked.operationStatus().equals("UNKNOWN");
 
-		jdbcClient.sql("""
+		int rowsUpdated = jdbcClient.sql("""
 				UPDATE payment_operations
 				SET status = 'UNKNOWN',
 				    psp_result_code = :pspResultCode,
@@ -175,11 +177,17 @@ class PaymentOperationProcessingRepository {
 				    lease_until = NULL,
 				    updated_at = :now
 				WHERE id = :operationId
+				  AND (lease_owner = :self OR lease_owner IS NULL)
 				""")
 				.param("pspResultCode", reasonCode)
 				.param("now", databaseTimestamp(now))
 				.param("operationId", operationId)
+				.param("self", self)
 				.update();
+
+		if (rowsUpdated == 0) {
+			return false;
+		}
 
 		if (!alreadyUnknown) {
 			long sequenceNumber = nextAuditSequence(locked.paymentId());
@@ -232,11 +240,11 @@ class PaymentOperationProcessingRepository {
 				.optional();
 	}
 
-	private OutcomeMapping applyOutcome(
-			Locked locked, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
+	private Optional<OutcomeMapping> applyOutcome(
+			Locked locked, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now, UUID self) {
 		OutcomeMapping mapping = OutcomeMapping.forOutcome(outcome, now);
 
-		jdbcClient.sql("""
+		int rowsUpdated = jdbcClient.sql("""
 				UPDATE payment_operations
 				SET status = :status,
 				    psp_reference = :pspReference,
@@ -248,6 +256,7 @@ class PaymentOperationProcessingRepository {
 				    lease_until = NULL,
 				    updated_at = :now
 				WHERE id = :operationId
+				  AND (lease_owner = :self OR lease_owner IS NULL)
 				""")
 				.param("status", mapping.newOperationStatus())
 				.param("pspReference", outcome.pspReference())
@@ -257,7 +266,12 @@ class PaymentOperationProcessingRepository {
 				.param("unknownSince", mapping.unknownSince() == null ? null : databaseTimestamp(mapping.unknownSince()))
 				.param("now", databaseTimestamp(now))
 				.param("operationId", locked.operationId())
+				.param("self", self)
 				.update();
+
+		if (rowsUpdated == 0) {
+			return Optional.empty();
+		}
 
 		long sequenceNumber = nextAuditSequence(locked.paymentId());
 		insertAuditEvent(
@@ -300,7 +314,7 @@ class PaymentOperationProcessingRepository {
 					now);
 		}
 
-		return mapping;
+		return Optional.of(mapping);
 	}
 
 	private long nextAuditSequence(UUID paymentId) {

@@ -41,7 +41,8 @@ class PaymentOperationAttemptExecutorTests {
 						PaymentOperationProcessingRepository.LeaseClaim.Status.ACQUIRED, 2, previousOwner));
 		PspAuthorizationOutcome lookupOutcome = PspAuthorizationOutcome.succeeded(OPERATION_ID.toString());
 		when(lookupClient.lookup(OPERATION_ID)).thenReturn(lookupOutcome);
-		when(repository.commitOutcome(OPERATION_ID, lookupOutcome, CORRELATION_ID, CAUSATION_ID, NOW)).thenReturn(true);
+		when(repository.commitOutcome(eq(OPERATION_ID), any(), eq(lookupOutcome), eq(CORRELATION_ID), eq(CAUSATION_ID), eq(NOW)))
+				.thenReturn(true);
 
 		boolean ackEligible = executor().execute(context(), CORRELATION_ID, CAUSATION_ID);
 
@@ -63,7 +64,8 @@ class PaymentOperationAttemptExecutorTests {
 		when(repository.reserveAttempt(eq(OPERATION_ID), any(), eq(NOW), any())).thenReturn(Optional.of(3));
 		PspAuthorizationOutcome attemptOutcome = PspAuthorizationOutcome.succeeded(OPERATION_ID.toString());
 		when(attemptClient3.authorize(any())).thenReturn(attemptOutcome);
-		when(repository.commitOutcome(OPERATION_ID, attemptOutcome, CORRELATION_ID, CAUSATION_ID, NOW)).thenReturn(true);
+		when(repository.commitOutcome(eq(OPERATION_ID), any(), eq(attemptOutcome), eq(CORRELATION_ID), eq(CAUSATION_ID), eq(NOW)))
+				.thenReturn(true);
 
 		boolean ackEligible = executor().execute(context(), CORRELATION_ID, CAUSATION_ID);
 
@@ -86,7 +88,7 @@ class PaymentOperationAttemptExecutorTests {
 		when(attemptClient2.authorize(any())).thenReturn(PspAuthorizationOutcome.unknown("PSP_UNREACHABLE"));
 		when(attemptClient3.authorize(any())).thenReturn(PspAuthorizationOutcome.unknown("PSP_UNREACHABLE"));
 		when(repository.commitUnknownWithReconciliationJob(
-				eq(OPERATION_ID), eq("PSP_UNREACHABLE"), eq(CORRELATION_ID), eq(CAUSATION_ID), any()))
+				eq(OPERATION_ID), any(), eq("PSP_UNREACHABLE"), eq(CORRELATION_ID), eq(CAUSATION_ID), any()))
 				.thenReturn(true);
 
 		boolean ackEligible = executor().execute(context(), CORRELATION_ID, CAUSATION_ID);
@@ -96,7 +98,7 @@ class PaymentOperationAttemptExecutorTests {
 		verify(attemptClient2).authorize(any());
 		verify(attemptClient3).authorize(any());
 		verify(repository).commitUnknownWithReconciliationJob(
-				eq(OPERATION_ID), eq("PSP_UNREACHABLE"), eq(CORRELATION_ID), eq(CAUSATION_ID), any());
+				eq(OPERATION_ID), any(), eq("PSP_UNREACHABLE"), eq(CORRELATION_ID), eq(CAUSATION_ID), any());
 	}
 
 	@Test
@@ -107,7 +109,7 @@ class PaymentOperationAttemptExecutorTests {
 		when(repository.reserveAttempt(eq(OPERATION_ID), any(), any(), any())).thenReturn(Optional.of(1));
 		PspAuthorizationOutcome outcome = PspAuthorizationOutcome.rejected(OPERATION_ID.toString(), "CARD_DECLINED");
 		when(attemptClient1.authorize(any())).thenReturn(outcome);
-		when(repository.commitOutcome(eq(OPERATION_ID), eq(outcome), eq(CORRELATION_ID), eq(CAUSATION_ID), any()))
+		when(repository.commitOutcome(eq(OPERATION_ID), any(), eq(outcome), eq(CORRELATION_ID), eq(CAUSATION_ID), any()))
 				.thenReturn(true);
 
 		boolean ackEligible = executor().execute(context(), CORRELATION_ID, CAUSATION_ID);

@@ -98,6 +98,7 @@ class ReconciliationJobRepositoryTests {
 		UUID self = UUID.randomUUID();
 		Instant now = Instant.parse("2026-10-25T10:00:00Z");
 		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		assertThat(operationLeaseOwner(operationId)).isNull();
 		UUID jobId = insertJob(operationId, now.minusSeconds(10));
 		List<ReconciliationJobRepository.ReconciliationJobClaim> claims =
 				repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
@@ -247,6 +248,14 @@ class ReconciliationJobRepositoryTests {
 				.param("id", jobId)
 				.query(Integer.class)
 				.single();
+	}
+
+	private UUID operationLeaseOwner(UUID operationId) {
+		return jdbcClient.sql("SELECT lease_owner FROM payment_operations WHERE id = :id")
+				.param("id", operationId)
+				.query(UUID.class)
+				.optional()
+				.orElse(null);
 	}
 
 	private UUID jobLeaseOwner(UUID jobId) {

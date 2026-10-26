@@ -71,6 +71,7 @@ class PaymentOperationProcessingRepositoryTests {
 
 		boolean ackEligible = repository.commitOutcome(
 				operationId,
+				UUID.randomUUID(),
 				PspAuthorizationOutcome.succeeded(operationId.toString()),
 				UUID.randomUUID(),
 				UUID.randomUUID(),
@@ -91,6 +92,7 @@ class PaymentOperationProcessingRepositoryTests {
 
 		boolean ackEligible = repository.commitOutcome(
 				operationId,
+				UUID.randomUUID(),
 				PspAuthorizationOutcome.rejected(operationId.toString(), "CARD_DECLINED"),
 				UUID.randomUUID(),
 				null,
@@ -109,6 +111,7 @@ class PaymentOperationProcessingRepositoryTests {
 
 		boolean ackEligible = repository.commitOutcome(
 				operationId,
+				UUID.randomUUID(),
 				PspAuthorizationOutcome.failed(operationId.toString(), "NON_EXECUTION_CONFIRMED"),
 				UUID.randomUUID(),
 				null,
@@ -128,6 +131,7 @@ class PaymentOperationProcessingRepositoryTests {
 
 		boolean ackEligible = repository.commitOutcome(
 				operationId,
+				UUID.randomUUID(),
 				PspAuthorizationOutcome.unknown("PSP_UNREACHABLE"),
 				UUID.randomUUID(),
 				null,
@@ -147,6 +151,7 @@ class PaymentOperationProcessingRepositoryTests {
 
 		boolean ackEligible = repository.commitOutcome(
 				operationId,
+				UUID.randomUUID(),
 				PspAuthorizationOutcome.rejected(operationId.toString(), "SHOULD_NOT_APPLY"),
 				UUID.randomUUID(),
 				null,
@@ -240,15 +245,67 @@ class PaymentOperationProcessingRepositoryTests {
 	}
 
 	@Test
+	void staleOwnerCannotCommitDefinitiveOutcomeAfterLeaseTakeover() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID owner1 = UUID.randomUUID();
+		UUID owner2 = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PROCESSING", "CREATED");
+		Instant claimedAt = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, owner1, claimedAt.plus(Duration.ofSeconds(120)));
+
+		Instant afterExpiry = claimedAt.plus(Duration.ofSeconds(130));
+		PaymentOperationProcessingRepository.LeaseClaim takeover =
+				repository.claimOrRenewLease(operationId, owner2, afterExpiry, Duration.ofSeconds(120));
+		assertThat(takeover.status()).isEqualTo(PaymentOperationProcessingRepository.LeaseClaim.Status.ACQUIRED);
+
+		boolean committed = repository.commitOutcome(
+				operationId,
+				owner1,
+				PspAuthorizationOutcome.succeeded(operationId.toString()),
+				UUID.randomUUID(),
+				null,
+				afterExpiry.plusSeconds(1));
+
+		assertThat(committed).isFalse();
+		assertThat(operationStatus(operationId)).isEqualTo("PROCESSING");
+		assertThat(leaseOwner(operationId)).isEqualTo(owner2);
+		assertThat(auditEventTypesInOrder(paymentId)).isEmpty();
+	}
+
+	@Test
+	void staleOwnerCannotCommitUnknownAfterLeaseTakeover() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID owner1 = UUID.randomUUID();
+		UUID owner2 = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, operationId, "PROCESSING", "CREATED");
+		Instant claimedAt = Instant.parse("2026-10-25T10:00:00Z");
+		setLease(operationId, owner1, claimedAt.plus(Duration.ofSeconds(120)));
+
+		Instant afterExpiry = claimedAt.plus(Duration.ofSeconds(130));
+		repository.claimOrRenewLease(operationId, owner2, afterExpiry, Duration.ofSeconds(120));
+
+		boolean committed = repository.commitUnknownWithReconciliationJob(
+				operationId, owner1, "PSP_ATTEMPTS_EXHAUSTED", UUID.randomUUID(), null, afterExpiry.plusSeconds(1));
+
+		assertThat(committed).isFalse();
+		assertThat(operationStatus(operationId)).isEqualTo("PROCESSING");
+		assertThat(leaseOwner(operationId)).isEqualTo(owner2);
+		assertThat(reconciliationJobCount(operationId)).isEqualTo(0);
+	}
+
+	@Test
 	void commitUnknownWithReconciliationJobAtomicallyPersistsOperationAuditAndJob() {
 		UUID paymentId = UUID.randomUUID();
 		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
 		seedPaymentAndOperation(paymentId, operationId, "PENDING", "CREATED");
 		Instant now = Instant.parse("2026-10-25T10:00:00Z");
-		setLease(operationId, UUID.randomUUID(), now.plus(Duration.ofSeconds(120)));
+		setLease(operationId, self, now.plus(Duration.ofSeconds(120)));
 
 		boolean ackEligible = repository.commitUnknownWithReconciliationJob(
-				operationId, "PSP_ATTEMPTS_EXHAUSTED", UUID.randomUUID(), null, now);
+				operationId, self, "PSP_ATTEMPTS_EXHAUSTED", UUID.randomUUID(), null, now);
 
 		assertThat(ackEligible).isTrue();
 		assertThat(operationStatus(operationId)).isEqualTo("UNKNOWN");
@@ -265,9 +322,10 @@ class PaymentOperationProcessingRepositoryTests {
 		seedPaymentAndOperation(paymentId, operationId, "PENDING", "CREATED");
 		Instant now = Instant.parse("2026-10-25T10:00:00Z");
 
-		repository.commitUnknownWithReconciliationJob(operationId, "PSP_UNREACHABLE", UUID.randomUUID(), null, now);
+		UUID self = UUID.randomUUID();
+		repository.commitUnknownWithReconciliationJob(operationId, self, "PSP_UNREACHABLE", UUID.randomUUID(), null, now);
 		boolean secondAckEligible = repository.commitUnknownWithReconciliationJob(
-				operationId, "PSP_UNREACHABLE", UUID.randomUUID(), null, now.plusSeconds(5));
+				operationId, self, "PSP_UNREACHABLE", UUID.randomUUID(), null, now.plusSeconds(5));
 
 		assertThat(secondAckEligible).isTrue();
 		assertThat(auditEventTypesInOrder(paymentId)).containsExactly("PAYMENT_OPERATION_UNKNOWN");
