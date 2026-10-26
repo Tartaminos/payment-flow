@@ -45,8 +45,7 @@ class PaymentOperationCommandListenerTests {
 
 		PaymentOperationWorkerPool workerPool = synchronousWorkerPool();
 
-		new PaymentOperationCommandListener(processor, admission, workerPool)
-				.onPaymentOperationCommand(record, acknowledgment);
+		listener(processor, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(acknowledgment).acknowledge();
 	}
@@ -67,8 +66,7 @@ class PaymentOperationCommandListenerTests {
 
 		PaymentOperationWorkerPool workerPool = synchronousWorkerPool();
 
-		new PaymentOperationCommandListener(processor, admission, workerPool)
-				.onPaymentOperationCommand(record, acknowledgment);
+		listener(processor, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(acknowledgment, never()).acknowledge();
 	}
@@ -87,8 +85,7 @@ class PaymentOperationCommandListenerTests {
 
 		PaymentOperationWorkerPool workerPool = mock(PaymentOperationWorkerPool.class);
 
-		new PaymentOperationCommandListener(processor, admission, workerPool)
-				.onPaymentOperationCommand(record, acknowledgment);
+		listener(processor, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(acknowledgment, never()).acknowledge();
 		verifyNoInteractions(workerPool);
@@ -108,8 +105,7 @@ class PaymentOperationCommandListenerTests {
 
 		PaymentOperationWorkerPool workerPool = mock(PaymentOperationWorkerPool.class);
 
-		new PaymentOperationCommandListener(processor, admission, workerPool)
-				.onPaymentOperationCommand(record, acknowledgment);
+		listener(processor, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(acknowledgment, never()).acknowledge();
 		verifyNoInteractions(workerPool);
@@ -132,8 +128,7 @@ class PaymentOperationCommandListenerTests {
 
 		PaymentOperationWorkerPool workerPool = synchronousWorkerPool();
 
-		new PaymentOperationCommandListener(processor, admission, workerPool)
-				.onPaymentOperationCommand(record, acknowledgment);
+		listener(processor, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(admission, atLeastOnce()).partitionsNeedingResume();
 	}
@@ -158,8 +153,7 @@ class PaymentOperationCommandListenerTests {
 
 		PaymentOperationWorkerPool workerPool = synchronousWorkerPool();
 
-		new PaymentOperationCommandListener(processor, admission, workerPool)
-				.onPaymentOperationCommand(record, acknowledgment);
+		listener(processor, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(acknowledgment).acknowledge();
 		verify(promotedAcknowledgment).acknowledge();
@@ -186,8 +180,7 @@ class PaymentOperationCommandListenerTests {
 			return null;
 		}).when(workerPool).submit(any());
 
-		PaymentOperationCommandListener listener =
-				new PaymentOperationCommandListener(processor, admission, workerPool);
+		PaymentOperationCommandListener listener = listener(processor, admission, workerPool);
 
 		listener.onPaymentOperationCommand(
 				consumerRecord(partitionZero, UUID.randomUUID().toString()), mock(Acknowledgment.class));
@@ -209,6 +202,72 @@ class PaymentOperationCommandListenerTests {
 		verify(container, never()).resumePartition(partitionOne);
 	}
 
+	@Test
+	void overflowRecordIsRetainedAndDispatchedOnceCapacityFreesWithoutNewIncomingRecord() {
+		PaymentOperationProcessor processor = mock(PaymentOperationProcessor.class);
+		when(processor.process(any(), any())).thenReturn(true);
+
+		TopicPartition partitionZero = new TopicPartition("payment.operations.requested.v1", 0);
+
+		KafkaListenerEndpointRegistry registry = mock(KafkaListenerEndpointRegistry.class);
+		MessageListenerContainer container = mock(MessageListenerContainer.class);
+		when(registry.getListenerContainer(PaymentOperationCommandListener.LISTENER_ID)).thenReturn(container);
+
+		PaymentWorkAdmission admission = new PaymentWorkAdmission(testProperties(1, 1, 4), registry);
+
+		List<Runnable> submittedTasks = new ArrayList<>();
+		PaymentOperationWorkerPool workerPool = mock(PaymentOperationWorkerPool.class);
+		doAnswer(invocation -> {
+			submittedTasks.add(invocation.getArgument(0));
+			return null;
+		}).when(workerPool).submit(any());
+
+		PaymentOperationCommandListener listener = listener(processor, admission, workerPool);
+
+		Acknowledgment firstAcknowledgment = mock(Acknowledgment.class);
+		Acknowledgment overflowAcknowledgment = mock(Acknowledgment.class);
+
+		listener.onPaymentOperationCommand(
+				consumerRecord(partitionZero, UUID.randomUUID().toString()), firstAcknowledgment);
+		listener.onPaymentOperationCommand(
+				consumerRecord(partitionZero, UUID.randomUUID().toString()), overflowAcknowledgment);
+
+		verify(container).pausePartition(partitionZero);
+		assertThat(submittedTasks).hasSize(1);
+
+		submittedTasks.get(0).run();
+
+		verify(container).resumePartition(partitionZero);
+		assertThat(submittedTasks).hasSize(2);
+
+		submittedTasks.get(1).run();
+
+		verify(overflowAcknowledgment).acknowledge();
+	}
+
+	@Test
+	void ineligibleAcknowledgmentIsRecordedAndEligibleAcknowledgmentClearsIt() {
+		PaymentOperationProcessor processor = mock(PaymentOperationProcessor.class);
+		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		when(processor.process(eq(record.key()), any())).thenReturn(false);
+
+		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
+		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
+		when(admission.currentEpoch(partition)).thenReturn(0L);
+		when(admission.tryAdmit(any(), eq(partition), any())).thenReturn(PaymentWorkAdmission.AdmissionResult.ADMIT);
+		when(admission.partitionsNeedingResume()).thenReturn(Set.of());
+		when(admission.release(any(), eq(partition))).thenReturn(Optional.empty());
+
+		BlockedPartitionDiagnostics diagnostics = mock(BlockedPartitionDiagnostics.class);
+		PaymentOperationWorkerPool workerPool = synchronousWorkerPool();
+
+		new PaymentOperationCommandListener(processor, admission, workerPool, diagnostics)
+				.onPaymentOperationCommand(record, mock(Acknowledgment.class));
+
+		verify(diagnostics).recordIneligible(eq(partition), any());
+		verify(diagnostics, never()).recordEligible(any());
+	}
+
 	private ProcessorProperties testProperties(int globalCapacity, int perPartitionCapacity, int perPaymentWaitingCapacity) {
 		return new ProcessorProperties(
 				URI.create("http://localhost:8081"),
@@ -221,6 +280,11 @@ class PaymentOperationCommandListenerTests {
 				new ProcessorProperties.Reconciliation(
 						Duration.ofSeconds(5), 20, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofSeconds(60)),
 				new ProcessorProperties.Workers(globalCapacity, perPartitionCapacity, perPaymentWaitingCapacity, 4));
+	}
+
+	private PaymentOperationCommandListener listener(
+			PaymentOperationProcessor processor, PaymentWorkAdmission admission, PaymentOperationWorkerPool workerPool) {
+		return new PaymentOperationCommandListener(processor, admission, workerPool, mock(BlockedPartitionDiagnostics.class));
 	}
 
 	private PaymentOperationWorkerPool synchronousWorkerPool() {

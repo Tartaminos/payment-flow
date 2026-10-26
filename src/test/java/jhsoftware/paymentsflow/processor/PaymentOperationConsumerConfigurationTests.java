@@ -20,6 +20,19 @@ class PaymentOperationConsumerConfigurationTests {
 		ConcurrentKafkaListenerContainerFactory<String, Object> factory =
 				configuration.paymentOperationKafkaListenerContainerFactory(consumerFactory, admission);
 
-		assertThat(factory.getContainerProperties().getAckMode()).isEqualTo(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+		assertThat(factory.getContainerProperties().getAckMode()).isEqualTo(ContainerProperties.AckMode.MANUAL);
+	}
+
+	@Test
+	void listenerContainerFactoryDefersAcknowledgmentsToTheHighestContiguousOffset() {
+		PaymentOperationConsumerConfiguration configuration = new PaymentOperationConsumerConfiguration();
+		@SuppressWarnings("unchecked")
+		ConsumerFactory<Object, Object> consumerFactory = mock(ConsumerFactory.class);
+		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
+
+		ConcurrentKafkaListenerContainerFactory<String, Object> factory =
+				configuration.paymentOperationKafkaListenerContainerFactory(consumerFactory, admission);
+
+		assertThat(factory.getContainerProperties().isAsyncAcks()).isTrue();
 	}
 }

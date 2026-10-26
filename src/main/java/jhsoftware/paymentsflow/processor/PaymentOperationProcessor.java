@@ -1,5 +1,6 @@
 package jhsoftware.paymentsflow.processor;
 
+import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,18 +15,25 @@ import org.springframework.stereotype.Component;
 class PaymentOperationProcessor {
 
 	private static final Logger logger = LoggerFactory.getLogger(PaymentOperationProcessor.class);
+	private static final String UNKNOWN_STATUS = "UNKNOWN";
 
 	private final PaymentOperationCommandDecoder decoder;
 	private final PaymentOperationProcessingRepository repository;
 	private final PaymentOperationAttemptExecutor attemptExecutor;
+	private final ReconciliationScannerHealth scannerHealth;
+	private final Clock clock;
 
 	PaymentOperationProcessor(
 			PaymentOperationCommandDecoder decoder,
 			PaymentOperationProcessingRepository repository,
-			PaymentOperationAttemptExecutor attemptExecutor) {
+			PaymentOperationAttemptExecutor attemptExecutor,
+			ReconciliationScannerHealth scannerHealth,
+			Clock clock) {
 		this.decoder = decoder;
 		this.repository = repository;
 		this.attemptExecutor = attemptExecutor;
+		this.scannerHealth = scannerHealth;
+		this.clock = clock;
 	}
 
 	boolean process(String recordKey, GenericRecord recordValue) {
@@ -59,7 +67,7 @@ class PaymentOperationProcessor {
 		}
 
 		if (context.isUnknownAwaitingReconciliation()) {
-			return true;
+			return scannerHealth.isOperational(clock.instant());
 		}
 
 		if (!"AUTHORIZE".equals(context.operationType())) {
@@ -70,7 +78,21 @@ class PaymentOperationProcessor {
 			return false;
 		}
 
-		return attemptExecutor.execute(context, command.correlationId(), command.causationId());
+		boolean ackEligible = attemptExecutor.execute(context, command.correlationId(), command.causationId());
+		if (!ackEligible) {
+			return false;
+		}
+
+		if (isNowUnknown(command.operationId())) {
+			return scannerHealth.isOperational(clock.instant());
+		}
+		return true;
+	}
+
+	private boolean isNowUnknown(UUID operationId) {
+		return repository.loadContext(operationId)
+				.map(refreshed -> UNKNOWN_STATUS.equals(refreshed.operationStatus()))
+				.orElse(false);
 	}
 
 	private UUID parsePaymentId(String recordKey) {

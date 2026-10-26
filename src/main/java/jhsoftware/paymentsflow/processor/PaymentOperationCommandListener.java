@@ -1,5 +1,6 @@
 package jhsoftware.paymentsflow.processor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.apache.avro.generic.GenericRecord;
@@ -21,14 +22,17 @@ class PaymentOperationCommandListener {
 	private final PaymentOperationProcessor processor;
 	private final PaymentWorkAdmission admission;
 	private final PaymentOperationWorkerPool workerPool;
+	private final BlockedPartitionDiagnostics blockedPartitionDiagnostics;
 
 	PaymentOperationCommandListener(
 			PaymentOperationProcessor processor,
 			PaymentWorkAdmission admission,
-			PaymentOperationWorkerPool workerPool) {
+			PaymentOperationWorkerPool workerPool,
+			BlockedPartitionDiagnostics blockedPartitionDiagnostics) {
 		this.processor = processor;
 		this.admission = admission;
 		this.workerPool = workerPool;
+		this.blockedPartitionDiagnostics = blockedPartitionDiagnostics;
 	}
 
 	@KafkaListener(
@@ -59,6 +63,12 @@ class PaymentOperationCommandListener {
 		try {
 			boolean ackEligible = processor.process(
 					command.record().key(), (GenericRecord) command.record().value());
+			if (ackEligible) {
+				blockedPartitionDiagnostics.recordEligible(command.partition());
+			}
+			else {
+				blockedPartitionDiagnostics.recordIneligible(command.partition(), Instant.now());
+			}
 			if (ackEligible && admission.currentEpoch(command.partition()) == command.epoch()) {
 				command.acknowledgment().acknowledge();
 			}
@@ -70,7 +80,11 @@ class PaymentOperationCommandListener {
 	}
 
 	private void resumeReadyPartitions() {
-		admission.partitionsNeedingResume();
+		for (TopicPartition partition : admission.partitionsNeedingResume()) {
+			for (QueuedCommand command : admission.drainOverflow(partition)) {
+				dispatch(command);
+			}
+		}
 	}
 
 	private UUID parsePaymentId(String recordKey) {

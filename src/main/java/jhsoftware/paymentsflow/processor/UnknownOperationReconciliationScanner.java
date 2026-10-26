@@ -24,18 +24,21 @@ class UnknownOperationReconciliationScanner {
 	private final ProcessorIdentity identity;
 	private final ProcessorProperties properties;
 	private final Clock clock;
+	private final ReconciliationScannerHealth health;
 
 	UnknownOperationReconciliationScanner(
 			ReconciliationJobRepository repository,
 			PspLookupClient lookupClient,
 			ProcessorIdentity identity,
 			ProcessorProperties properties,
-			Clock clock) {
+			Clock clock,
+			ReconciliationScannerHealth health) {
 		this.repository = repository;
 		this.lookupClient = lookupClient;
 		this.identity = identity;
 		this.properties = properties;
 		this.clock = clock;
+		this.health = health;
 	}
 
 	@Scheduled(fixedDelay = 5000, initialDelay = 5000)
@@ -50,6 +53,8 @@ class UnknownOperationReconciliationScanner {
 		for (ReconciliationJobRepository.ReconciliationJobClaim claim : claims) {
 			resolveOrBackOff(claim, self);
 		}
+
+		health.recordHeartbeat(now);
 	}
 
 	private void resolveOrBackOff(ReconciliationJobRepository.ReconciliationJobClaim claim, UUID self) {

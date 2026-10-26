@@ -1,10 +1,12 @@
 package jhsoftware.paymentsflow.processor;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -35,6 +37,7 @@ class PaymentWorkAdmission {
 	private final Set<UUID> activePayments = new HashSet<>();
 	private final Map<TopicPartition, Long> epochByPartition = new HashMap<>();
 	private final Set<TopicPartition> capacityPaused = new HashSet<>();
+	private final Map<TopicPartition, Deque<QueuedCommand>> overflowByPartition = new HashMap<>();
 
 	PaymentWorkAdmission(ProcessorProperties properties, KafkaListenerEndpointRegistry registry) {
 		this.globalCapacity = properties.workers().globalCapacity();
@@ -45,27 +48,61 @@ class PaymentWorkAdmission {
 
 	AdmissionResult tryAdmit(UUID paymentId, TopicPartition partition, QueuedCommand command) {
 		synchronized (lock) {
-			int partitionCount = partitionInFlight.getOrDefault(partition, 0);
-			if (globalInFlight >= globalCapacity || partitionCount >= perPartitionCapacity) {
+			AdmissionResult result = admitInternal(paymentId, partition, command);
+			if (result == AdmissionResult.OVERFLOW) {
 				pausePartition(partition);
+				overflowByPartition.computeIfAbsent(partition, key -> new ArrayDeque<>()).addLast(command);
+			}
+			return result;
+		}
+	}
+
+	List<QueuedCommand> drainOverflow(TopicPartition partition) {
+		synchronized (lock) {
+			List<QueuedCommand> toDispatch = new ArrayList<>();
+			Deque<QueuedCommand> overflow = overflowByPartition.get(partition);
+			if (overflow == null) {
+				return toDispatch;
+			}
+
+			while (!overflow.isEmpty()) {
+				QueuedCommand candidate = overflow.peekFirst();
+				AdmissionResult result = admitInternal(candidate.paymentId(), partition, candidate);
+				if (result == AdmissionResult.OVERFLOW) {
+					break;
+				}
+				overflow.pollFirst();
+				if (result == AdmissionResult.ADMIT) {
+					toDispatch.add(candidate);
+				}
+			}
+
+			if (overflow.isEmpty()) {
+				overflowByPartition.remove(partition);
+			}
+			return toDispatch;
+		}
+	}
+
+	private AdmissionResult admitInternal(UUID paymentId, TopicPartition partition, QueuedCommand command) {
+		int partitionCount = partitionInFlight.getOrDefault(partition, 0);
+		if (globalInFlight >= globalCapacity || partitionCount >= perPartitionCapacity) {
+			return AdmissionResult.OVERFLOW;
+		}
+
+		if (activePayments.contains(paymentId)) {
+			Deque<QueuedCommand> waiting = waitingByPayment.computeIfAbsent(paymentId, key -> new ArrayDeque<>());
+			if (waiting.size() >= perPaymentWaitingCapacity) {
 				return AdmissionResult.OVERFLOW;
 			}
-
-			if (activePayments.contains(paymentId)) {
-				Deque<QueuedCommand> waiting = waitingByPayment.computeIfAbsent(paymentId, key -> new ArrayDeque<>());
-				if (waiting.size() >= perPaymentWaitingCapacity) {
-					pausePartition(partition);
-					return AdmissionResult.OVERFLOW;
-				}
-				waiting.addLast(command);
-				admitCounters(partition);
-				return AdmissionResult.QUEUED;
-			}
-
-			activePayments.add(paymentId);
+			waiting.addLast(command);
 			admitCounters(partition);
-			return AdmissionResult.ADMIT;
+			return AdmissionResult.QUEUED;
 		}
+
+		activePayments.add(paymentId);
+		admitCounters(partition);
+		return AdmissionResult.ADMIT;
 	}
 
 	Optional<QueuedCommand> release(UUID paymentId, TopicPartition partition) {
@@ -108,6 +145,7 @@ class PaymentWorkAdmission {
 			}
 			globalInFlight -= removed;
 			partitionInFlight.remove(partition);
+			overflowByPartition.remove(partition);
 			if (capacityPaused.remove(partition)) {
 				resumePartition(partition);
 			}

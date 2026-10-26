@@ -7,7 +7,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -62,14 +64,30 @@ class PaymentOperationProcessorTests {
 	}
 
 	@Test
-	void unknownOperationWithOpenReconciliationJobShortCircuitsWithoutRunningAttempts() {
+	void unknownOperationWithOpenReconciliationJobAndHealthyScannerIsAcknowledgedWithoutRunningAttempts() {
 		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
 		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
+		ReconciliationScannerHealth scannerHealth = mock(ReconciliationScannerHealth.class);
 		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(contextWithOpenJob()));
+		when(scannerHealth.isOperational(NOW)).thenReturn(true);
 
-		boolean ackEligible = processor(repository, executor).process(PAYMENT_ID.toString(), command());
+		boolean ackEligible = processor(repository, executor, scannerHealth).process(PAYMENT_ID.toString(), command());
 
 		assertThat(ackEligible).isTrue();
+		verify(executor, never()).execute(any(), any(), any());
+	}
+
+	@Test
+	void unknownOperationWithOpenReconciliationJobAndUnhealthyScannerWithholdsAcknowledgment() {
+		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
+		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
+		ReconciliationScannerHealth scannerHealth = mock(ReconciliationScannerHealth.class);
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(contextWithOpenJob()));
+		when(scannerHealth.isOperational(NOW)).thenReturn(false);
+
+		boolean ackEligible = processor(repository, executor, scannerHealth).process(PAYMENT_ID.toString(), command());
+
+		assertThat(ackEligible).isFalse();
 		verify(executor, never()).execute(any(), any(), any());
 	}
 
@@ -99,9 +117,47 @@ class PaymentOperationProcessorTests {
 		verify(executor).execute(pendingContext, CORRELATION_ID, null);
 	}
 
+	@Test
+	void freshlyCommittedUnknownWithHealthyScannerIsAcknowledged() {
+		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
+		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
+		ReconciliationScannerHealth scannerHealth = mock(ReconciliationScannerHealth.class);
+		PaymentOperationContext pendingContext = context("PENDING");
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(pendingContext), Optional.of(context("UNKNOWN")));
+		when(executor.execute(pendingContext, CORRELATION_ID, null)).thenReturn(true);
+		when(scannerHealth.isOperational(NOW)).thenReturn(true);
+
+		boolean ackEligible = processor(repository, executor, scannerHealth).process(PAYMENT_ID.toString(), command());
+
+		assertThat(ackEligible).isTrue();
+	}
+
+	@Test
+	void freshlyCommittedUnknownWithUnhealthyScannerWithholdsAcknowledgment() {
+		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
+		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
+		ReconciliationScannerHealth scannerHealth = mock(ReconciliationScannerHealth.class);
+		PaymentOperationContext pendingContext = context("PENDING");
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(pendingContext), Optional.of(context("UNKNOWN")));
+		when(executor.execute(pendingContext, CORRELATION_ID, null)).thenReturn(true);
+		when(scannerHealth.isOperational(NOW)).thenReturn(false);
+
+		boolean ackEligible = processor(repository, executor, scannerHealth).process(PAYMENT_ID.toString(), command());
+
+		assertThat(ackEligible).isFalse();
+	}
+
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository, PaymentOperationAttemptExecutor executor) {
-		return new PaymentOperationProcessor(new PaymentOperationCommandDecoder(), repository, executor);
+		return processor(repository, executor, mock(ReconciliationScannerHealth.class));
+	}
+
+	private PaymentOperationProcessor processor(
+			PaymentOperationProcessingRepository repository,
+			PaymentOperationAttemptExecutor executor,
+			ReconciliationScannerHealth scannerHealth) {
+		return new PaymentOperationProcessor(
+				new PaymentOperationCommandDecoder(), repository, executor, scannerHealth, Clock.fixed(NOW, ZoneOffset.UTC));
 	}
 
 	private PaymentOperationContext context(String operationStatus) {

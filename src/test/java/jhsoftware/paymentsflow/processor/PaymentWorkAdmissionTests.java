@@ -159,6 +159,41 @@ class PaymentWorkAdmissionTests {
 	}
 
 	@Test
+	void overflowRecordIsRetainedAndAdmittedOnceCapacityFrees() {
+		PaymentWorkAdmission admission = admission(1, 1, 4);
+		TopicPartition partition = partition(0);
+		UUID firstPaymentId = UUID.randomUUID();
+		UUID overflowPaymentId = UUID.randomUUID();
+		QueuedCommand overflowCommand = command(overflowPaymentId, partition);
+		admission.tryAdmit(firstPaymentId, partition, command(firstPaymentId, partition));
+
+		PaymentWorkAdmission.AdmissionResult overflowResult = admission.tryAdmit(overflowPaymentId, partition, overflowCommand);
+		assertThat(overflowResult).isEqualTo(PaymentWorkAdmission.AdmissionResult.OVERFLOW);
+		assertThat(admission.drainOverflow(partition)).isEmpty();
+
+		admission.release(firstPaymentId, partition);
+
+		List<QueuedCommand> drained = admission.drainOverflow(partition);
+		assertThat(drained).containsExactly(overflowCommand);
+		assertThat(admission.drainOverflow(partition)).isEmpty();
+	}
+
+	@Test
+	void quarantinePartitionDiscardsOverflowRetainedCommandsForThatPartition() {
+		PaymentWorkAdmission admission = admission(1, 1, 4);
+		TopicPartition partition = partition(0);
+		UUID firstPaymentId = UUID.randomUUID();
+		UUID overflowPaymentId = UUID.randomUUID();
+		admission.tryAdmit(firstPaymentId, partition, command(firstPaymentId, partition));
+		admission.tryAdmit(overflowPaymentId, partition, command(overflowPaymentId, partition));
+
+		admission.quarantinePartition(partition);
+		admission.release(firstPaymentId, partition);
+
+		assertThat(admission.drainOverflow(partition)).isEmpty();
+	}
+
+	@Test
 	void quarantinePartitionDropsQueuedCommandsForThatPartition() {
 		PaymentWorkAdmission admission = admission(32, 8, 4);
 		TopicPartition partition = partition(0);
