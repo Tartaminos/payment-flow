@@ -15,7 +15,8 @@ record ProcessorProperties(
 		Duration operationLeaseDuration,
 		Duration retryGapAfterFirstAttempt,
 		Duration retryGapAfterSecondAttempt,
-		Reconciliation reconciliation) {
+		Reconciliation reconciliation,
+		Workers workers) {
 
 	ProcessorProperties {
 		if (pspBaseUrl == null) {
@@ -47,6 +48,9 @@ record ProcessorProperties(
 		if (reconciliation == null) {
 			throw new IllegalArgumentException("paymentflow.processor.reconciliation is required");
 		}
+		if (workers == null) {
+			throw new IllegalArgumentException("paymentflow.processor.workers is required");
+		}
 	}
 
 	record Reconciliation(Duration pollInterval, int batchSize, Duration claimLease, Duration backoffInitial, Duration backoffMax) {
@@ -66,6 +70,24 @@ record ProcessorProperties(
 			}
 			if (backoffMax == null || backoffMax.compareTo(backoffInitial) < 0) {
 				throw new IllegalArgumentException("paymentflow.processor.reconciliation.backoff-max must be at least the initial backoff");
+			}
+		}
+	}
+
+	record Workers(int globalCapacity, int perPartitionCapacity, int perPaymentWaitingCapacity, int poolSize) {
+
+		Workers {
+			if (globalCapacity < 1) {
+				throw new IllegalArgumentException("paymentflow.processor.workers.global-capacity must be positive");
+			}
+			if (perPartitionCapacity < 1) {
+				throw new IllegalArgumentException("paymentflow.processor.workers.per-partition-capacity must be positive");
+			}
+			if (perPaymentWaitingCapacity < 1) {
+				throw new IllegalArgumentException("paymentflow.processor.workers.per-payment-waiting-capacity must be positive");
+			}
+			if (poolSize < 1) {
+				throw new IllegalArgumentException("paymentflow.processor.workers.pool-size must be positive");
 			}
 		}
 	}

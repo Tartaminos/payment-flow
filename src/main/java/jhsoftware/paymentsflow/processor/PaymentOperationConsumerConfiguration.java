@@ -23,10 +23,11 @@ class PaymentOperationConsumerConfiguration {
 
 	@Bean(LISTENER_CONTAINER_FACTORY)
 	ConcurrentKafkaListenerContainerFactory<String, Object> paymentOperationKafkaListenerContainerFactory(
-			ConsumerFactory<Object, Object> kafkaConsumerFactory) {
+			ConsumerFactory<Object, Object> kafkaConsumerFactory, PaymentWorkAdmission admission) {
 		ConcurrentKafkaListenerContainerFactory<String, Object> factory = new ConcurrentKafkaListenerContainerFactory<>();
 		factory.setConsumerFactory(toTypedConsumerFactory(kafkaConsumerFactory));
 		factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+		factory.getContainerProperties().setConsumerRebalanceListener(new PaymentOperationRebalanceListener(admission));
 		return factory;
 	}
 

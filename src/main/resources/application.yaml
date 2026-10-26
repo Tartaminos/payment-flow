@@ -27,6 +27,7 @@ spring:
       properties:
         schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8082}
         specific.avro.reader: false
+        max.poll.records: 16
 
 paymentflow:
   merchant-id: 550e8400-e29b-41d4-a716-446655440000
@@ -54,3 +55,8 @@ paymentflow:
       claim-lease: 30s
       backoff-initial: 5s
       backoff-max: 60s
+    workers:
+      global-capacity: 32
+      per-partition-capacity: 8
+      per-payment-waiting-capacity: 4
+      pool-size: 4

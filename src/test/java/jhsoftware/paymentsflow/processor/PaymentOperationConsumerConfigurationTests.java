@@ -15,9 +15,10 @@ class PaymentOperationConsumerConfigurationTests {
 		PaymentOperationConsumerConfiguration configuration = new PaymentOperationConsumerConfiguration();
 		@SuppressWarnings("unchecked")
 		ConsumerFactory<Object, Object> consumerFactory = mock(ConsumerFactory.class);
+		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
 
 		ConcurrentKafkaListenerContainerFactory<String, Object> factory =
-				configuration.paymentOperationKafkaListenerContainerFactory(consumerFactory);
+				configuration.paymentOperationKafkaListenerContainerFactory(consumerFactory, admission);
 
 		assertThat(factory.getContainerProperties().getAckMode()).isEqualTo(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
 	}
