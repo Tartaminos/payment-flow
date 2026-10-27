@@ -20,6 +20,7 @@ class PaymentOperationProcessor {
 	private final PaymentOperationCommandDecoder decoder;
 	private final PaymentOperationProcessingRepository repository;
 	private final PaymentOperationAttemptExecutor attemptExecutor;
+	private final PaymentOperationCaptureAttemptExecutor captureAttemptExecutor;
 	private final ReconciliationScannerHealth scannerHealth;
 	private final Clock clock;
 
@@ -27,11 +28,13 @@ class PaymentOperationProcessor {
 			PaymentOperationCommandDecoder decoder,
 			PaymentOperationProcessingRepository repository,
 			PaymentOperationAttemptExecutor attemptExecutor,
+			PaymentOperationCaptureAttemptExecutor captureAttemptExecutor,
 			ReconciliationScannerHealth scannerHealth,
 			Clock clock) {
 		this.decoder = decoder;
 		this.repository = repository;
 		this.attemptExecutor = attemptExecutor;
+		this.captureAttemptExecutor = captureAttemptExecutor;
 		this.scannerHealth = scannerHealth;
 		this.clock = clock;
 	}
@@ -70,15 +73,11 @@ class PaymentOperationProcessor {
 			return scannerHealth.isOperational(clock.instant());
 		}
 
-		if (!"AUTHORIZE".equals(context.operationType())) {
-			logger.error(
-					"Operation {} has unsupported type {} for the authorization processor; withholding acknowledgment",
-					command.operationId(),
-					context.operationType());
-			return false;
-		}
-
-		boolean ackEligible = attemptExecutor.execute(context, command.correlationId(), command.causationId());
+		boolean ackEligible = switch (context.operationType()) {
+			case "AUTHORIZE" -> attemptExecutor.execute(context, command.correlationId(), command.causationId());
+			case "CAPTURE" -> captureAttemptExecutor.execute(context, command.correlationId(), command.causationId());
+			default -> rejectUnsupportedType(command.operationId(), context.operationType());
+		};
 		if (!ackEligible) {
 			return false;
 		}
@@ -87,6 +86,14 @@ class PaymentOperationProcessor {
 			return scannerHealth.isOperational(clock.instant());
 		}
 		return true;
+	}
+
+	private boolean rejectUnsupportedType(UUID operationId, String operationType) {
+		logger.error(
+				"Operation {} has unsupported type {} for the payment operation processor; withholding acknowledgment",
+				operationId,
+				operationType);
+		return false;
 	}
 
 	private boolean isNowUnknown(UUID operationId) {

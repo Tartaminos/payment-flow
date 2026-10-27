@@ -23,4 +23,13 @@ record PspOperationRecord(
 				&& amountMinor == request.amountMinor()
 				&& currency.equals(request.currency());
 	}
+
+	boolean matches(CaptureOperationRequest request) {
+		return paymentId.equals(request.paymentId())
+				&& amountMinor == request.amountMinor()
+				&& currency.equals(request.currency())
+				&& "CAPTURE".equals(operationType)
+				&& authorizationPspOperationId != null
+				&& authorizationPspOperationId.equals(request.authorizationPspOperationId());
+	}
 }

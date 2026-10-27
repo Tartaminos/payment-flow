@@ -36,12 +36,15 @@ class PaymentOperationProcessingRepository {
 				       p.merchant_id AS merchant_id,
 				       p.currency AS currency,
 				       p.status AS payment_status,
+				       authorize_op.psp_reference AS authorization_psp_reference,
 				       EXISTS (
 				           SELECT 1 FROM reconciliation_jobs rj
 				           WHERE rj.operation_id = po.id AND rj.resolved_at IS NULL
 				       ) AS has_unresolved_job
 				FROM payment_operations po
 				JOIN payments p ON p.id = po.payment_id
+				LEFT JOIN payment_operations authorize_op
+				    ON authorize_op.payment_id = p.id AND authorize_op.type = 'AUTHORIZE'
 				WHERE po.id = :operationId
 				""")
 				.param("operationId", operationId)
@@ -223,6 +226,7 @@ class PaymentOperationProcessingRepository {
 	private Optional<Locked> lockOperation(UUID operationId) {
 		return jdbcClient.sql("""
 				SELECT po.id AS operation_id,
+				       po.type AS operation_type,
 				       po.status AS operation_status,
 				       p.id AS payment_id,
 				       p.status AS payment_status
@@ -234,6 +238,7 @@ class PaymentOperationProcessingRepository {
 				.param("operationId", operationId)
 				.query((resultSet, rowNumber) -> new Locked(
 						resultSet.getObject("operation_id", UUID.class),
+						resultSet.getString("operation_type"),
 						resultSet.getString("operation_status"),
 						resultSet.getObject("payment_id", UUID.class),
 						resultSet.getString("payment_status")))
@@ -242,7 +247,7 @@ class PaymentOperationProcessingRepository {
 
 	private Optional<OutcomeMapping> applyOutcome(
 			Locked locked, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now, UUID self) {
-		OutcomeMapping mapping = OutcomeMapping.forOutcome(outcome, now);
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(locked.operationType(), outcome, now);
 
 		int rowsUpdated = jdbcClient.sql("""
 				UPDATE payment_operations
@@ -287,34 +292,45 @@ class PaymentOperationProcessingRepository {
 				sequenceNumber,
 				now);
 
-		if (mapping.newPaymentStatus() != null) {
-			jdbcClient.sql("""
+		if (mapping.newPaymentStatus() != null && isEligiblePaymentTransitionSource(locked)) {
+			int paymentRowsUpdated = jdbcClient.sql("""
 					UPDATE payments
 					SET status = :status,
 					    version = version + 1,
 					    updated_at = :now
 					WHERE id = :paymentId
+					  AND status = :lockedPaymentStatus
 					""")
 					.param("status", mapping.newPaymentStatus())
 					.param("now", databaseTimestamp(now))
 					.param("paymentId", locked.paymentId())
+					.param("lockedPaymentStatus", locked.paymentStatus())
 					.update();
 
-			insertAuditEvent(
-					locked.paymentId(),
-					locked.operationId(),
-					"PAYMENT",
-					"PAYMENT_" + mapping.newPaymentStatus(),
-					locked.paymentStatus(),
-					mapping.newPaymentStatus(),
-					null,
-					correlationId,
-					causationId,
-					sequenceNumber + 1,
-					now);
+			if (paymentRowsUpdated == 1) {
+				insertAuditEvent(
+						locked.paymentId(),
+						locked.operationId(),
+						"PAYMENT",
+						"PAYMENT_" + mapping.newPaymentStatus(),
+						locked.paymentStatus(),
+						mapping.newPaymentStatus(),
+						null,
+						correlationId,
+						causationId,
+						sequenceNumber + 1,
+						now);
+			}
 		}
 
 		return Optional.of(mapping);
+	}
+
+	private boolean isEligiblePaymentTransitionSource(Locked locked) {
+		if (locked.operationType().equals("AUTHORIZE")) {
+			return locked.paymentStatus().equals("CREATED");
+		}
+		return locked.paymentStatus().equals("AUTHORIZED");
 	}
 
 	private long nextAuditSequence(UUID paymentId) {
@@ -379,14 +395,15 @@ class PaymentOperationProcessingRepository {
 				resultSet.getString("payment_status"),
 				resultSet.getInt("attempt_count"),
 				resultSet.getObject("lease_owner", UUID.class),
-				resultSet.getBoolean("has_unresolved_job"));
+				resultSet.getBoolean("has_unresolved_job"),
+				resultSet.getString("authorization_psp_reference"));
 	}
 
 	private OffsetDateTime databaseTimestamp(Instant instant) {
 		return instant.atOffset(ZoneOffset.UTC);
 	}
 
-	private record Locked(UUID operationId, String operationStatus, UUID paymentId, String paymentStatus) {
+	private record Locked(UUID operationId, String operationType, String operationStatus, UUID paymentId, String paymentStatus) {
 	}
 
 	private record LeaseRow(String status, UUID leaseOwner, OffsetDateTime leaseUntil, int attemptCount) {

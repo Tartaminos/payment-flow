@@ -92,15 +92,17 @@ class PaymentOperationProcessorTests {
 	}
 
 	@Test
-	void nonAuthorizeOperationTypeWithholdsAcknowledgmentAndNeverRunsAttempts() {
+	void unsupportedOperationTypeWithholdsAcknowledgmentAndNeverRunsAnyExecutor() {
 		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
 		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
-		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(context("PENDING", "CAPTURE")));
+		PaymentOperationCaptureAttemptExecutor captureExecutor = mock(PaymentOperationCaptureAttemptExecutor.class);
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(context("PENDING", "VOID")));
 
-		boolean ackEligible = processor(repository, executor).process(PAYMENT_ID.toString(), command());
+		boolean ackEligible = processor(repository, executor, captureExecutor).process(PAYMENT_ID.toString(), command());
 
 		assertThat(ackEligible).isFalse();
 		verify(executor, never()).execute(any(), any(), any());
+		verify(captureExecutor, never()).execute(any(), any(), any());
 	}
 
 	@Test
@@ -115,6 +117,22 @@ class PaymentOperationProcessorTests {
 
 		assertThat(ackEligible).isTrue();
 		verify(executor).execute(pendingContext, CORRELATION_ID, null);
+	}
+
+	@Test
+	void pendingCaptureOperationDelegatesToCaptureAttemptExecutor() {
+		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
+		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
+		PaymentOperationCaptureAttemptExecutor captureExecutor = mock(PaymentOperationCaptureAttemptExecutor.class);
+		PaymentOperationContext pendingContext = context("PENDING", "CAPTURE");
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(pendingContext));
+		when(captureExecutor.execute(pendingContext, CORRELATION_ID, null)).thenReturn(true);
+
+		boolean ackEligible = processor(repository, executor, captureExecutor).process(PAYMENT_ID.toString(), command());
+
+		assertThat(ackEligible).isTrue();
+		verify(captureExecutor).execute(pendingContext, CORRELATION_ID, null);
+		verify(executor, never()).execute(any(), any(), any());
 	}
 
 	@Test
@@ -149,15 +167,31 @@ class PaymentOperationProcessorTests {
 
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository, PaymentOperationAttemptExecutor executor) {
-		return processor(repository, executor, mock(ReconciliationScannerHealth.class));
+		return processor(repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class), mock(ReconciliationScannerHealth.class));
+	}
+
+	private PaymentOperationProcessor processor(
+			PaymentOperationProcessingRepository repository,
+			PaymentOperationAttemptExecutor executor,
+			PaymentOperationCaptureAttemptExecutor captureExecutor) {
+		return processor(repository, executor, captureExecutor, mock(ReconciliationScannerHealth.class));
 	}
 
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository,
 			PaymentOperationAttemptExecutor executor,
 			ReconciliationScannerHealth scannerHealth) {
+		return processor(repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class), scannerHealth);
+	}
+
+	private PaymentOperationProcessor processor(
+			PaymentOperationProcessingRepository repository,
+			PaymentOperationAttemptExecutor executor,
+			PaymentOperationCaptureAttemptExecutor captureExecutor,
+			ReconciliationScannerHealth scannerHealth) {
 		return new PaymentOperationProcessor(
-				new PaymentOperationCommandDecoder(), repository, executor, scannerHealth, Clock.fixed(NOW, ZoneOffset.UTC));
+				new PaymentOperationCommandDecoder(), repository, executor, captureExecutor, scannerHealth,
+				Clock.fixed(NOW, ZoneOffset.UTC));
 	}
 
 	private PaymentOperationContext context(String operationStatus) {
@@ -167,13 +201,13 @@ class PaymentOperationProcessorTests {
 	private PaymentOperationContext context(String operationStatus, String operationType) {
 		return new PaymentOperationContext(
 				OPERATION_ID, operationType, operationStatus, 50000L, "BRL", PAYMENT_ID, UUID.randomUUID(), "CREATED",
-				0, null, false);
+				0, null, false, null);
 	}
 
 	private PaymentOperationContext contextWithOpenJob() {
 		return new PaymentOperationContext(
 				OPERATION_ID, "AUTHORIZE", "UNKNOWN", 50000L, "BRL", PAYMENT_ID, UUID.randomUUID(), "CREATED",
-				3, null, true);
+				3, null, true, null);
 	}
 
 	private GenericRecord command() {

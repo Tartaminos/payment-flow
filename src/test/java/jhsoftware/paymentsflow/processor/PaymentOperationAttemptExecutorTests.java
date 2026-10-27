@@ -159,6 +159,6 @@ class PaymentOperationAttemptExecutorTests {
 	private PaymentOperationContext context() {
 		return new PaymentOperationContext(
 				OPERATION_ID, "AUTHORIZE", "PENDING", 50000L, "BRL", UUID.randomUUID(), UUID.randomUUID(), "CREATED",
-				0, null, false);
+				0, null, false, null);
 	}
 }

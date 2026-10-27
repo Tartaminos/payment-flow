@@ -46,6 +46,14 @@ class PaymentOperationConsumerConfiguration {
 	}
 
 	@Bean
+	List<PspCaptureClient> pspCaptureAttemptClients(ProcessorProperties properties) {
+		return properties.pspAttemptReadTimeouts().stream()
+				.map(readTimeout -> new PspCaptureClient(
+						buildRestClient(properties.pspBaseUrl(), properties.pspConnectTimeout(), readTimeout)))
+				.toList();
+	}
+
+	@Bean
 	RestClient pspLookupRestClient(ProcessorProperties properties) {
 		return buildRestClient(properties.pspBaseUrl(), properties.pspConnectTimeout(), properties.pspLookupReadTimeout());
 	}

@@ -13,7 +13,8 @@ record PaymentOperationContext(
 		String paymentStatus,
 		int attemptCount,
 		UUID leaseOwner,
-		boolean hasUnresolvedReconciliationJob) {
+		boolean hasUnresolvedReconciliationJob,
+		String authorizationPspReference) {
 
 	boolean isFinalized() {
 		return operationStatus.equals("SUCCEEDED")

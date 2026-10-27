@@ -180,6 +180,110 @@ class PaymentOperationProcessingRepositoryTests {
 	}
 
 	@Test
+	void loadContextForCaptureResolvesTheSiblingAuthorizationPspReference() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizeOperationId = UUID.randomUUID();
+		UUID captureOperationId = UUID.randomUUID();
+		UUID authorizationPspOperationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, authorizeOperationId, "SUCCEEDED", "AUTHORIZED");
+		jdbcClient.sql("UPDATE payment_operations SET psp_reference = :pspReference WHERE id = :id")
+				.param("pspReference", authorizationPspOperationId.toString())
+				.param("id", authorizeOperationId)
+				.update();
+		seedCaptureOperation(paymentId, captureOperationId, "PENDING");
+
+		PaymentOperationContext context = repository.loadContext(captureOperationId).orElseThrow();
+
+		assertThat(context.operationType()).isEqualTo("CAPTURE");
+		assertThat(context.authorizationPspReference()).isEqualTo(authorizationPspOperationId.toString());
+	}
+
+	@Test
+	void captureSucceededOutcomeCapturesPaymentAndAppendsOrderedAudit() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizeOperationId = UUID.randomUUID();
+		UUID captureOperationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, authorizeOperationId, "SUCCEEDED", "AUTHORIZED");
+		seedCaptureOperation(paymentId, captureOperationId, "PENDING");
+
+		boolean ackEligible = repository.commitOutcome(
+				captureOperationId,
+				UUID.randomUUID(),
+				PspAuthorizationOutcome.succeeded(captureOperationId.toString()),
+				UUID.randomUUID(),
+				UUID.randomUUID(),
+				Instant.parse("2026-10-25T10:00:00Z"));
+
+		assertThat(ackEligible).isTrue();
+		assertThat(operationStatus(captureOperationId)).isEqualTo("SUCCEEDED");
+		assertThat(paymentStatus(paymentId)).isEqualTo("CAPTURED");
+	}
+
+	@Test
+	void captureRejectionWithAuthorizationExpiredReasonTransitionsPaymentToExpired() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizeOperationId = UUID.randomUUID();
+		UUID captureOperationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, authorizeOperationId, "SUCCEEDED", "AUTHORIZED");
+		seedCaptureOperation(paymentId, captureOperationId, "PENDING");
+
+		boolean ackEligible = repository.commitOutcome(
+				captureOperationId,
+				UUID.randomUUID(),
+				PspAuthorizationOutcome.rejected(captureOperationId.toString(), "AUTHORIZATION_EXPIRED"),
+				UUID.randomUUID(),
+				UUID.randomUUID(),
+				Instant.parse("2026-10-25T10:00:00Z"));
+
+		assertThat(ackEligible).isTrue();
+		assertThat(operationStatus(captureOperationId)).isEqualTo("REJECTED");
+		assertThat(paymentStatus(paymentId)).isEqualTo("EXPIRED");
+	}
+
+	@Test
+	void captureOrdinaryRejectionLeavesPaymentAuthorized() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizeOperationId = UUID.randomUUID();
+		UUID captureOperationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, authorizeOperationId, "SUCCEEDED", "AUTHORIZED");
+		seedCaptureOperation(paymentId, captureOperationId, "PENDING");
+
+		boolean ackEligible = repository.commitOutcome(
+				captureOperationId,
+				UUID.randomUUID(),
+				PspAuthorizationOutcome.rejected(captureOperationId.toString(), "NON_EXECUTION_CONFIRMED"),
+				UUID.randomUUID(),
+				UUID.randomUUID(),
+				Instant.parse("2026-10-25T10:00:00Z"));
+
+		assertThat(ackEligible).isTrue();
+		assertThat(operationStatus(captureOperationId)).isEqualTo("REJECTED");
+		assertThat(paymentStatus(paymentId)).isEqualTo("AUTHORIZED");
+	}
+
+	@Test
+	void staleCaptureExpiryCommitNeverOverwritesAnAlreadyCapturedPayment() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizeOperationId = UUID.randomUUID();
+		UUID captureOperationId = UUID.randomUUID();
+		seedPaymentAndOperation(paymentId, authorizeOperationId, "SUCCEEDED", "CAPTURED");
+		seedCaptureOperation(paymentId, captureOperationId, "PENDING");
+
+		boolean ackEligible = repository.commitOutcome(
+				captureOperationId,
+				UUID.randomUUID(),
+				PspAuthorizationOutcome.rejected(captureOperationId.toString(), "AUTHORIZATION_EXPIRED"),
+				UUID.randomUUID(),
+				UUID.randomUUID(),
+				Instant.parse("2026-10-25T10:00:00Z"));
+
+		assertThat(ackEligible).isTrue();
+		assertThat(operationStatus(captureOperationId)).isEqualTo("REJECTED");
+		assertThat(paymentStatus(paymentId)).isEqualTo("CAPTURED");
+		assertThat(auditEventTypesInOrder(paymentId)).containsExactly("PAYMENT_OPERATION_REJECTED");
+	}
+
+	@Test
 	void reserveAttemptEnforcesThreeAttemptBudget() {
 		UUID paymentId = UUID.randomUUID();
 		UUID operationId = UUID.randomUUID();
@@ -383,6 +487,22 @@ class PaymentOperationProcessingRepositoryTests {
 				    (id, payment_id, type, status, amount_minor, psp_idempotency_key, attempt_count, created_at, updated_at)
 				VALUES
 				    (:id, :paymentId, 'AUTHORIZE', :status, 50000, :pspIdempotencyKey, 0, :now, :now)
+				""")
+				.param("id", operationId)
+				.param("paymentId", paymentId)
+				.param("status", operationStatus)
+				.param("pspIdempotencyKey", operationId.toString())
+				.param("now", now)
+				.update();
+	}
+
+	private void seedCaptureOperation(UUID paymentId, UUID operationId, String operationStatus) {
+		OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+		jdbcClient.sql("""
+				INSERT INTO payment_operations
+				    (id, payment_id, type, status, amount_minor, psp_idempotency_key, attempt_count, created_at, updated_at)
+				VALUES
+				    (:id, :paymentId, 'CAPTURE', :status, 50000, :pspIdempotencyKey, 0, :now, :now)
 				""")
 				.param("id", operationId)
 				.param("paymentId", paymentId)

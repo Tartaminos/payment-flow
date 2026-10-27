@@ -20,7 +20,7 @@ class PspAuthorizationClientTests {
 
 	private static final PaymentOperationContext CONTEXT = new PaymentOperationContext(
 			UUID.randomUUID(), "AUTHORIZE", "PENDING", 50000L, "BRL", UUID.randomUUID(), UUID.randomUUID(), "CREATED",
-			0, null, false);
+			0, null, false, null);
 
 	@Test
 	void succeededResponseYieldsSucceededOutcomeWithPspReference() {
