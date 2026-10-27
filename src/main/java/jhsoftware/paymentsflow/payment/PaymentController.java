@@ -22,10 +22,15 @@ class PaymentController {
 
 	private final PaymentAdmissionService paymentAdmissionService;
 	private final PaymentStatusService paymentStatusService;
+	private final CaptureAdmissionService captureAdmissionService;
 
-	PaymentController(PaymentAdmissionService paymentAdmissionService, PaymentStatusService paymentStatusService) {
+	PaymentController(
+			PaymentAdmissionService paymentAdmissionService,
+			PaymentStatusService paymentStatusService,
+			CaptureAdmissionService captureAdmissionService) {
 		this.paymentAdmissionService = paymentAdmissionService;
 		this.paymentStatusService = paymentStatusService;
+		this.captureAdmissionService = captureAdmissionService;
 	}
 
 	@PostMapping
@@ -40,5 +45,18 @@ class PaymentController {
 	@GetMapping("/{paymentId}")
 	ResponseEntity<PaymentStatusResponse> read(@PathVariable String paymentId) {
 		return ResponseEntity.ok(paymentStatusService.getStatus(paymentId));
+	}
+
+	@PostMapping("/{paymentId}/capture")
+	ResponseEntity<CreatePaymentResponse> capture(
+			@PathVariable String paymentId,
+			@RequestHeader("Idempotency-Key")
+			@NotBlank @Pattern(regexp = "[\\x20-\\x7e]{1,150}") String idempotencyKey,
+			@RequestBody(required = false) byte[] body) {
+		if (body != null && body.length > 0) {
+			throw new InvalidPaymentRequestException();
+		}
+		CreatePaymentResponse response = captureAdmissionService.admit(paymentId, idempotencyKey);
+		return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
 	}
 }

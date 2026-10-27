@@ -31,6 +31,10 @@ spring:
 
 paymentflow:
   merchant-id: 550e8400-e29b-41d4-a716-446655440000
+  capture-validity:
+    psp-base-url: ${PSP_SIMULATOR_URL:http://localhost:8081}
+    psp-connect-timeout: 3s
+    psp-read-timeout: 3s
   messaging:
     enabled: false
     schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8082}

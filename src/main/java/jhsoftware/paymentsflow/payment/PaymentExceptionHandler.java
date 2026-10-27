@@ -31,6 +31,18 @@ class PaymentExceptionHandler {
 	private static final ApiError PAYMENT_NOT_FOUND = new ApiError(
 			"PAYMENT_NOT_FOUND",
 			"The payment could not be found.");
+	private static final ApiError PAYMENT_ALREADY_CAPTURED = new ApiError(
+			"PAYMENT_ALREADY_CAPTURED",
+			"The payment has already been captured.");
+	private static final ApiError PAYMENT_NOT_ELIGIBLE = new ApiError(
+			"PAYMENT_NOT_ELIGIBLE",
+			"The payment is not eligible for this operation.");
+	private static final ApiError PAYMENT_OPERATION_IN_PROGRESS = new ApiError(
+			"PAYMENT_OPERATION_IN_PROGRESS",
+			"A conflicting payment operation is already in progress.");
+	private static final ApiError PSP_STATUS_UNAVAILABLE = new ApiError(
+			"PSP_STATUS_UNAVAILABLE",
+			"The PSP could not confirm the authorization is still active.");
 
 	@ExceptionHandler({
 			InvalidPaymentRequestException.class,
@@ -57,6 +69,26 @@ class PaymentExceptionHandler {
 	@ExceptionHandler(PaymentNotFoundException.class)
 	ResponseEntity<ApiError> paymentNotFound() {
 		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(PAYMENT_NOT_FOUND);
+	}
+
+	@ExceptionHandler(PaymentAlreadyCapturedException.class)
+	ResponseEntity<ApiError> paymentAlreadyCaptured() {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(PAYMENT_ALREADY_CAPTURED);
+	}
+
+	@ExceptionHandler(PaymentNotEligibleException.class)
+	ResponseEntity<ApiError> paymentNotEligible() {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(PAYMENT_NOT_ELIGIBLE);
+	}
+
+	@ExceptionHandler(PaymentOperationInProgressException.class)
+	ResponseEntity<ApiError> paymentOperationInProgress() {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(PAYMENT_OPERATION_IN_PROGRESS);
+	}
+
+	@ExceptionHandler(PspStatusUnavailableException.class)
+	ResponseEntity<ApiError> pspStatusUnavailable() {
+		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(PSP_STATUS_UNAVAILABLE);
 	}
 
 	@ExceptionHandler(DataIntegrityViolationException.class)

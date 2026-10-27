@@ -12,6 +12,10 @@ record PspOperationRecord(
 		String currency,
 		String decision,
 		String decisionReason,
+		String operationType,
+		UUID authorizationPspOperationId,
+		String validity,
+		Instant validityEvidenceAt,
 		Instant createdAt) {
 
 	boolean matches(AuthorizeOperationRequest request) {

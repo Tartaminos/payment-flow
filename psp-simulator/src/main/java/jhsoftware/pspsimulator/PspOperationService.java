@@ -1,6 +1,7 @@
 package jhsoftware.pspsimulator;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,6 +35,7 @@ class PspOperationService {
 
 		String decision = decisionFor(fixtureOutcome);
 		String decisionReason = decisionReasonFor(fixtureOutcome);
+		Instant now = clock.instant();
 
 		try {
 			repository.insert(
@@ -44,7 +46,11 @@ class PspOperationService {
 					request.currency(),
 					decision,
 					decisionReason,
-					clock.instant());
+					"AUTHORIZE",
+					null,
+					"ACTIVE",
+					now,
+					now);
 		}
 		catch (DataIntegrityViolationException exception) {
 			PspOperationRecord raced = repository.findByMerchantAndPspOperationId(
@@ -58,14 +64,18 @@ class PspOperationService {
 		}
 
 		return new AuthorizeOperationResult(
-				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason),
+				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, "ACTIVE", now),
 				fixtureOutcome == PspFixtureOutcome.PROCESSING);
 	}
 
 	Optional<OperationDecisionResponse> findDecision(UUID pspOperationId) {
 		return repository.findByPspOperationId(pspOperationId)
 				.map(operation -> new OperationDecisionResponse(
-						operation.pspOperationId(), operation.decision(), operation.decisionReason()));
+						operation.pspOperationId(),
+						operation.decision(),
+						operation.decisionReason(),
+						operation.validity(),
+						operation.validityEvidenceAt()));
 	}
 
 	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, AuthorizeOperationRequest request) {
@@ -77,7 +87,12 @@ class PspOperationService {
 
 	private AuthorizeOperationResult toResult(PspOperationRecord record) {
 		return new AuthorizeOperationResult(
-				new OperationDecisionResponse(record.pspOperationId(), record.decision(), record.decisionReason()),
+				new OperationDecisionResponse(
+						record.pspOperationId(),
+						record.decision(),
+						record.decisionReason(),
+						record.validity(),
+						record.validityEvidenceAt()),
 				record.decision().equals("PROCESSING"));
 	}
 
