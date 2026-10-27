@@ -12,6 +12,26 @@ import org.springframework.stereotype.Component;
 class PaymentOperationCommandDecoder {
 
 	PaymentOperationCommand decode(GenericRecord record) {
+		try {
+			PaymentOperationCommand command = decodeForDiagnostics(record);
+			if (command.messageId() == null || command.operationId() == null || command.correlationId() == null
+					|| command.occurredAt() == null) {
+				throw new PoisonCommandException(PoisonFailureCode.INVALID_COMMAND_PAYLOAD);
+			}
+			if (!"ExecutePaymentOperation".equals(command.commandType())) {
+				throw new PoisonCommandException(PoisonFailureCode.UNSUPPORTED_COMMAND_TYPE);
+			}
+			return command;
+		}
+		catch (PoisonCommandException exception) {
+			throw exception;
+		}
+		catch (RuntimeException exception) {
+			throw new PoisonCommandException(PoisonFailureCode.INVALID_COMMAND_PAYLOAD, exception);
+		}
+	}
+
+	PaymentOperationCommand decodeForDiagnostics(GenericRecord record) {
 		return new PaymentOperationCommand(
 				uuidOf(record, "messageId"),
 				stringOf(record, "commandType"),

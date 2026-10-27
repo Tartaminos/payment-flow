@@ -7,7 +7,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.support.Acknowledgment;
 
 record QueuedCommand(
-		ConsumerRecord<String, Object> record,
+		ConsumerRecord<byte[], Object> record,
 		Acknowledgment acknowledgment,
 		TopicPartition partition,
 		UUID paymentId,

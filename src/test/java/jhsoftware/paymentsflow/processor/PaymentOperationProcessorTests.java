@@ -1,6 +1,7 @@
 package jhsoftware.paymentsflow.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -32,10 +33,9 @@ class PaymentOperationProcessorTests {
 		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
 		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(context("PENDING")));
 
-		boolean ackEligible = processor(repository, executor).process(
-				UUID.randomUUID().toString(), command());
-
-		assertThat(ackEligible).isFalse();
+		assertThatThrownBy(() -> processor(repository, executor).process(UUID.randomUUID().toString(), command()))
+				.isInstanceOfSatisfying(PoisonCommandException.class,
+						exception -> assertThat(exception.failureCode()).isEqualTo(PoisonFailureCode.INVALID_RECORD_KEY));
 		verify(executor, never()).execute(any(), any(), any());
 	}
 
@@ -45,9 +45,9 @@ class PaymentOperationProcessorTests {
 		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
 		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.empty());
 
-		boolean ackEligible = processor(repository, executor).process(PAYMENT_ID.toString(), command());
-
-		assertThat(ackEligible).isFalse();
+		assertThatThrownBy(() -> processor(repository, executor).process(PAYMENT_ID.toString(), command()))
+				.isInstanceOfSatisfying(PoisonCommandException.class,
+						exception -> assertThat(exception.failureCode()).isEqualTo(PoisonFailureCode.OPERATION_NOT_FOUND));
 		verify(executor, never()).execute(any(), any(), any());
 	}
 
@@ -99,10 +99,12 @@ class PaymentOperationProcessorTests {
 		PaymentOperationVoidAttemptExecutor voidExecutor = mock(PaymentOperationVoidAttemptExecutor.class);
 		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(context("PENDING", "REFUND")));
 
-		boolean ackEligible = processor(repository, executor, captureExecutor, voidExecutor, mock(ReconciliationScannerHealth.class))
-				.process(PAYMENT_ID.toString(), command());
-
-		assertThat(ackEligible).isFalse();
+		assertThatThrownBy(() -> processor(
+				repository, executor, captureExecutor, voidExecutor, mock(ReconciliationScannerHealth.class))
+				.process(PAYMENT_ID.toString(), command()))
+				.isInstanceOfSatisfying(PoisonCommandException.class,
+						exception -> assertThat(exception.failureCode())
+								.isEqualTo(PoisonFailureCode.UNSUPPORTED_OPERATION_TYPE));
 		verify(executor, never()).execute(any(), any(), any());
 		verify(captureExecutor, never()).execute(any(), any(), any());
 		verify(voidExecutor, never()).execute(any(), any(), any());

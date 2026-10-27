@@ -1,5 +1,9 @@
 package jhsoftware.paymentsflow.processor;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -38,7 +42,7 @@ class PaymentOperationCommandListener {
 			id = LISTENER_ID,
 			topics = OutboxMessagingConfiguration.TOPIC,
 			containerFactory = PaymentOperationConsumerConfiguration.LISTENER_CONTAINER_FACTORY)
-	void onPaymentOperationCommand(ConsumerRecord<String, Object> record, Acknowledgment acknowledgment) {
+	void onPaymentOperationCommand(ConsumerRecord<byte[], Object> record, Acknowledgment acknowledgment) {
 		resumeReadyPartitions();
 
 		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
@@ -85,11 +89,19 @@ class PaymentOperationCommandListener {
 		}
 	}
 
-	private UUID parsePaymentId(String recordKey) {
+	private UUID parsePaymentId(byte[] recordKey) {
 		try {
-			return recordKey == null ? UUID.randomUUID() : UUID.fromString(recordKey);
+			if (recordKey == null) {
+				return UUID.randomUUID();
+			}
+			String key = StandardCharsets.UTF_8.newDecoder()
+					.onMalformedInput(CodingErrorAction.REPORT)
+					.onUnmappableCharacter(CodingErrorAction.REPORT)
+					.decode(ByteBuffer.wrap(recordKey))
+					.toString();
+			return UUID.fromString(key);
 		}
-		catch (IllegalArgumentException exception) {
+		catch (IllegalArgumentException | CharacterCodingException exception) {
 			return UUID.randomUUID();
 		}
 	}

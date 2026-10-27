@@ -1,11 +1,13 @@
 package jhsoftware.paymentsflow.processor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -76,10 +78,22 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 	PaymentOperationRetryPublisher retryPublisher;
 
 	@Autowired
+	PaymentOperationQuarantineRepository quarantineRepository;
+
+	@Autowired
+	PaymentOperationQuarantinePublisher quarantinePublisher;
+
+	@Autowired
 	Schema paymentOperationRetrySchema;
 
 	@Autowired
+	Schema paymentOperationQuarantineSchema;
+
+	@Autowired
 	PaymentOperationRetryMessagingConfiguration.SchemaRegistryContract retrySchemaRegistryContract;
+
+	@Autowired
+	PaymentOperationQuarantineMessagingConfiguration.SchemaRegistryContract quarantineSchemaRegistryContract;
 
 	@Autowired
 	SchemaRegistryClient schemaRegistryClient;
@@ -89,9 +103,75 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 
 	@BeforeEach
 	void cleanDatabase() {
+		jdbcTemplate.update("DELETE FROM quarantined_commands");
 		jdbcTemplate.update("DELETE FROM payment_audit_events");
 		jdbcTemplate.update("DELETE FROM payment_operations");
 		jdbcTemplate.update("DELETE FROM payments");
+	}
+
+	@Test
+	void corruptedRecordIsPersistedAndPublishedToDlqBeforeBecomingAckEligible() {
+		byte[] sourceKey = new byte[] {(byte) 0x80, 1, 2};
+		byte[] sourceValue = new byte[] {1, 2, 3};
+		ConsumerRecord<byte[], Object> record = new ConsumerRecord<>(
+				SOURCE_TOPIC, 1, 401L, sourceKey, sourceValue);
+		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
+				rawValueDecoder, commandDecoder, mock(PaymentOperationProcessor.class), classifier, retryPublisher,
+				quarantineRepository, quarantinePublisher, clock);
+		UUID quarantineId = PaymentOperationRetryIdentity.quarantineId(SOURCE_TOPIC, 1, 401L);
+
+		try (KafkaConsumer<String, byte[]> dlqConsumer = topicConsumer("m5-02-dlq")) {
+			dlqConsumer.subscribe(List.of(PaymentOperationQuarantineMessagingConfiguration.TOPIC));
+			awaitAssignment(dlqConsumer);
+
+			assertThat(handoff.handle(record)).isTrue();
+
+			Map<String, Object> stored = jdbcTemplate.queryForMap("""
+					SELECT source_record_key, source_record_value, failure_code
+					FROM quarantined_commands
+					WHERE quarantine_id = ?
+					""", quarantineId);
+			assertThat((byte[]) stored.get("source_record_key")).isEqualTo(sourceKey);
+			assertThat((byte[]) stored.get("source_record_value")).isEqualTo(sourceValue);
+			assertThat(stored.get("failure_code")).isEqualTo(PoisonFailureCode.CORRUPTED_WIRE_FORMAT.name());
+
+			ConsumerRecord<String, byte[]> published = awaitRecord(dlqConsumer, quarantineId.toString());
+			GenericRecord envelope = decodeEnvelope(
+					PaymentOperationQuarantineMessagingConfiguration.TOPIC, published.value());
+			assertThat(envelope.get("quarantineId").toString()).isEqualTo(quarantineId.toString());
+			assertThat(envelope.get("failureCode").toString())
+					.isEqualTo(PoisonFailureCode.CORRUPTED_WIRE_FORMAT.name());
+			assertThat(bytes(envelope, "sourceRecordKey")).isEqualTo(sourceKey);
+			assertThat(bytes(envelope, "sourceRecordValue")).isEqualTo(sourceValue);
+			assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM payment_operations", Long.class)).isZero();
+		}
+	}
+
+	@Test
+	void unreachableDlqBrokerLeavesPersistedPoisonRecordIneligibleForAcknowledgment() {
+		DefaultKafkaProducerFactory<String, Object> brokenProducerFactory = brokenProducerFactory();
+		KafkaTemplate<String, Object> brokenKafkaTemplate = new KafkaTemplate<>(brokenProducerFactory);
+		PaymentOperationQuarantinePublisher brokenPublisher = new PaymentOperationQuarantinePublisher(
+				brokenKafkaTemplate, paymentOperationQuarantineSchema, quarantineSchemaRegistryContract);
+		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
+				rawValueDecoder, commandDecoder, mock(PaymentOperationProcessor.class), classifier, retryPublisher,
+				quarantineRepository, brokenPublisher, clock);
+		ConsumerRecord<byte[], Object> record = new ConsumerRecord<>(
+				SOURCE_TOPIC, 2, 402L, new byte[] {9, 8}, new byte[] {1, 2, 3});
+		UUID quarantineId = PaymentOperationRetryIdentity.quarantineId(SOURCE_TOPIC, 2, 402L);
+
+		try {
+			assertThatThrownBy(() -> handoff.handle(record))
+					.isInstanceOfSatisfying(PoisonCommandException.class,
+							exception -> assertThat(exception.failureCode())
+									.isEqualTo(PoisonFailureCode.CORRUPTED_WIRE_FORMAT));
+			assertThat(jdbcTemplate.queryForObject(
+					"SELECT count(*) FROM quarantined_commands WHERE quarantine_id = ?", Long.class, quarantineId))
+					.isEqualTo(1L);
+		}
+		finally {
+			brokenProducerFactory.destroy();
+		}
 	}
 
 	@Test
@@ -101,13 +181,15 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 		UUID messageId = UUID.randomUUID();
 		byte[] sourceBytes = encodeExecutePaymentOperation(messageId, operationId, correlationId);
 		String key = UUID.randomUUID().toString();
-		ConsumerRecord<String, Object> record = new ConsumerRecord<>(SOURCE_TOPIC, 3, 99L, key, sourceBytes);
+		ConsumerRecord<byte[], Object> record = new ConsumerRecord<>(
+				SOURCE_TOPIC, 3, 99L, key.getBytes(StandardCharsets.UTF_8), sourceBytes);
 
 		PaymentOperationProcessor failingProcessor = mock(PaymentOperationProcessor.class);
 		when(failingProcessor.process(eq(key), any())).thenThrow(
 				new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
 		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
-				rawValueDecoder, commandDecoder, failingProcessor, classifier, retryPublisher, clock);
+				rawValueDecoder, commandDecoder, failingProcessor, classifier, retryPublisher,
+				mock(PaymentOperationQuarantineRepository.class), mock(PaymentOperationQuarantinePublisher.class), clock);
 
 		try (KafkaConsumer<String, byte[]> retryConsumer = retryTopicConsumer()) {
 			retryConsumer.subscribe(List.of(PaymentOperationRetryMessagingConfiguration.TOPIC));
@@ -144,13 +226,15 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 		UUID messageId = UUID.randomUUID();
 		byte[] sourceBytes = encodeExecutePaymentOperation(messageId, operationId, correlationId);
 		String key = UUID.randomUUID().toString();
-		ConsumerRecord<String, Object> record = new ConsumerRecord<>(SOURCE_TOPIC, 7, 12L, key, sourceBytes);
+		ConsumerRecord<byte[], Object> record = new ConsumerRecord<>(
+				SOURCE_TOPIC, 7, 12L, key.getBytes(StandardCharsets.UTF_8), sourceBytes);
 
 		PaymentOperationProcessor failingProcessor = mock(PaymentOperationProcessor.class);
 		when(failingProcessor.process(eq(key), any())).thenThrow(
 				new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
 		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
-				rawValueDecoder, commandDecoder, failingProcessor, classifier, retryPublisher, clock);
+				rawValueDecoder, commandDecoder, failingProcessor, classifier, retryPublisher,
+				mock(PaymentOperationQuarantineRepository.class), mock(PaymentOperationQuarantinePublisher.class), clock);
 
 		try (KafkaConsumer<String, byte[]> retryConsumer = retryTopicConsumer()) {
 			retryConsumer.subscribe(List.of(PaymentOperationRetryMessagingConfiguration.TOPIC));
@@ -169,20 +253,7 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 
 	@Test
 	void publishFailureAgainstAnUnreachableBrokerReturnsFalseAndNeverAcknowledges() {
-		Map<String, Object> brokenProducerConfig = new java.util.HashMap<>();
-		brokenProducerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:1");
-		brokenProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-		brokenProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
-		brokenProducerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-		brokenProducerConfig.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 500);
-		brokenProducerConfig.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 1000);
-		brokenProducerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
-		brokenProducerConfig.put("schema.registry.url", "http://localhost:8082");
-		brokenProducerConfig.put("auto.register.schemas", false);
-		brokenProducerConfig.put("use.latest.version", false);
-		brokenProducerConfig.put("value.subject.name.strategy", RecordNameStrategy.class.getName());
-		DefaultKafkaProducerFactory<String, Object> brokenProducerFactory =
-				new DefaultKafkaProducerFactory<>(brokenProducerConfig);
+		DefaultKafkaProducerFactory<String, Object> brokenProducerFactory = brokenProducerFactory();
 		KafkaTemplate<String, Object> brokenKafkaTemplate = new KafkaTemplate<>(brokenProducerFactory);
 		PaymentOperationRetryPublisher brokenPublisher = new PaymentOperationRetryPublisher(
 				brokenKafkaTemplate, paymentOperationRetrySchema, retrySchemaRegistryContract);
@@ -244,19 +315,50 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 	}
 
 	private GenericRecord decodeRetryEnvelope(byte[] bytes) {
+		return decodeEnvelope(PaymentOperationRetryMessagingConfiguration.TOPIC, bytes);
+	}
+
+	private GenericRecord decodeEnvelope(String topic, byte[] bytes) {
 		Map<String, Object> deserializerConfig = Map.of(
 				"schema.registry.url", "http://localhost:8082",
 				"specific.avro.reader", false);
 		try (io.confluent.kafka.serializers.KafkaAvroDeserializer deserializer =
 				new io.confluent.kafka.serializers.KafkaAvroDeserializer(schemaRegistryClient, deserializerConfig)) {
-			return (GenericRecord) deserializer.deserialize(PaymentOperationRetryMessagingConfiguration.TOPIC, bytes);
+			return (GenericRecord) deserializer.deserialize(topic, bytes);
 		}
 	}
 
+	private byte[] bytes(GenericRecord record, String field) {
+		java.nio.ByteBuffer buffer = ((java.nio.ByteBuffer) record.get(field)).duplicate();
+		byte[] bytes = new byte[buffer.remaining()];
+		buffer.get(bytes);
+		return bytes;
+	}
+
+	private DefaultKafkaProducerFactory<String, Object> brokenProducerFactory() {
+		Map<String, Object> config = new java.util.HashMap<>();
+		config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:1");
+		config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
+		config.put(ProducerConfig.ACKS_CONFIG, "all");
+		config.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 500);
+		config.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 1000);
+		config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 1000);
+		config.put("schema.registry.url", "http://localhost:8082");
+		config.put("auto.register.schemas", false);
+		config.put("use.latest.version", false);
+		config.put("value.subject.name.strategy", RecordNameStrategy.class.getName());
+		return new DefaultKafkaProducerFactory<>(config);
+	}
+
 	private KafkaConsumer<String, byte[]> retryTopicConsumer() {
+		return topicConsumer("m5-01-real-test");
+	}
+
+	private KafkaConsumer<String, byte[]> topicConsumer(String groupPrefix) {
 		Properties properties = new Properties();
 		properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-		properties.put(ConsumerConfig.GROUP_ID_CONFIG, "m5-01-real-test-" + UUID.randomUUID());
+		properties.put(ConsumerConfig.GROUP_ID_CONFIG, groupPrefix + "-" + UUID.randomUUID());
 		properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 		properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 		properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);

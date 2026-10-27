@@ -403,8 +403,9 @@ class PaymentWorkAdmissionTests {
 	}
 
 	private QueuedCommand command(UUID paymentId, TopicPartition partition) {
-		ConsumerRecord<String, Object> record =
-				new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, paymentId.toString(), null);
+		ConsumerRecord<byte[], Object> record = new ConsumerRecord<>(
+				partition.topic(), partition.partition(), 0L,
+				paymentId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8), null);
 		return new QueuedCommand(record, NO_OP_ACKNOWLEDGMENT, partition, paymentId, 0L);
 	}
 }

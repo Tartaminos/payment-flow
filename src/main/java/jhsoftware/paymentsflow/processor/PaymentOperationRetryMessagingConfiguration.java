@@ -10,6 +10,7 @@ import org.apache.avro.Schema;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,7 +54,7 @@ class PaymentOperationRetryMessagingConfiguration {
 	@Bean
 	SchemaRegistryContract paymentOperationRetrySchemaRegistration(
 			SchemaRegistryClient schemaRegistryClient,
-			Schema paymentOperationRetrySchema) {
+			@Qualifier("paymentOperationRetrySchema") Schema paymentOperationRetrySchema) {
 		try {
 			schemaRegistryClient.updateCompatibility(SUBJECT, COMPATIBILITY);
 			int schemaId = schemaRegistryClient.register(SUBJECT, new AvroSchema(paymentOperationRetrySchema));

@@ -18,6 +18,11 @@ final class PaymentOperationRetryIdentity {
 		return uuidV5(NAMESPACE, name);
 	}
 
+	static UUID quarantineId(String sourceTopic, int sourcePartition, long sourceOffset) {
+		String name = "quarantine|" + sourceTopic + "|" + sourcePartition + "|" + sourceOffset;
+		return uuidV5(NAMESPACE, name);
+	}
+
 	private static UUID uuidV5(UUID namespace, String name) {
 		byte[] namespaceBytes = toBytes(namespace);
 		byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);

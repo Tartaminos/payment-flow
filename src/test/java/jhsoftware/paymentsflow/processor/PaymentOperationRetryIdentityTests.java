@@ -42,4 +42,17 @@ class PaymentOperationRetryIdentityTests {
 
 		assertThat(retryId.toString()).isEqualTo("4f6c7030-a668-5a24-b8a9-a2ddadd44857");
 	}
+
+	@Test
+	void quarantineIdIsStableVersionFiveAndDistinctFromRetryIdentity() {
+		UUID quarantineId = PaymentOperationRetryIdentity.quarantineId(
+				"payment.operations.requested.v1", 2, 17L);
+
+		assertThat(quarantineId).isEqualTo(PaymentOperationRetryIdentity.quarantineId(
+				"payment.operations.requested.v1", 2, 17L));
+		assertThat(quarantineId.version()).isEqualTo(5);
+		assertThat(quarantineId.variant()).isEqualTo(2);
+		assertThat(quarantineId).isNotEqualTo(PaymentOperationRetryIdentity.retryId(
+				"payment.operations.requested.v1", 2, 17L));
+	}
 }

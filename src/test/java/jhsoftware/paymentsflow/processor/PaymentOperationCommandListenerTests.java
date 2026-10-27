@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +33,7 @@ class PaymentOperationCommandListenerTests {
 	void admitSubmitsToWorkerPoolAndAcknowledgesOnSuccess() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 		when(retryHandoff.handle(record)).thenReturn(true);
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
@@ -53,13 +54,13 @@ class PaymentOperationCommandListenerTests {
 	void handoffFailureReleasesWorkWithoutAcknowledgingTheSourceRecord() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 		RuntimeException publishFailure = new RuntimeException("retry publish failed");
 		when(retryHandoff.handle(record)).thenThrow(publishFailure);
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
 		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
-		UUID paymentId = UUID.fromString(record.key());
+		UUID paymentId = UUID.fromString(new String(record.key(), StandardCharsets.UTF_8));
 		when(admission.currentEpoch(partition)).thenReturn(0L);
 		when(admission.tryAdmit(any(), eq(partition), any())).thenReturn(PaymentWorkAdmission.AdmissionResult.ADMIT);
 		when(admission.partitionsNeedingResume()).thenReturn(Set.of());
@@ -78,7 +79,7 @@ class PaymentOperationCommandListenerTests {
 	void admitWithholdsAcknowledgmentWhenEpochChangedDuringProcessing() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 		when(retryHandoff.handle(record)).thenReturn(true);
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
@@ -99,7 +100,7 @@ class PaymentOperationCommandListenerTests {
 	void queuedDoesNotAcknowledgeOrSubmitImmediately() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
 		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
@@ -119,7 +120,7 @@ class PaymentOperationCommandListenerTests {
 	void overflowWithholdsAcknowledgmentAndDoesNotSubmitToTheWorkerPool() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
 		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
@@ -139,7 +140,7 @@ class PaymentOperationCommandListenerTests {
 	void everyInvocationTriggersAResumeCheckOnAdmission() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 		when(retryHandoff.handle(record)).thenReturn(true);
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
@@ -162,13 +163,13 @@ class PaymentOperationCommandListenerTests {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
 		Acknowledgment acknowledgment = mock(Acknowledgment.class);
 		Acknowledgment promotedAcknowledgment = mock(Acknowledgment.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
-		ConsumerRecord<String, Object> promotedRecord = consumerRecord(record.key());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> promotedRecord = consumerRecord(new String(record.key(), StandardCharsets.UTF_8));
 		when(retryHandoff.handle(any())).thenReturn(true);
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
 		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
-		UUID paymentId = UUID.fromString(record.key());
+		UUID paymentId = UUID.fromString(new String(record.key(), StandardCharsets.UTF_8));
 		QueuedCommand promoted = new QueuedCommand(promotedRecord, promotedAcknowledgment, partition, paymentId, 0L);
 		when(admission.currentEpoch(partition)).thenReturn(0L);
 		when(admission.tryAdmit(any(), eq(partition), any())).thenReturn(PaymentWorkAdmission.AdmissionResult.ADMIT);
@@ -272,7 +273,7 @@ class PaymentOperationCommandListenerTests {
 	@Test
 	void ineligibleAcknowledgmentIsRecordedAndEligibleAcknowledgmentClearsIt() {
 		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
-		ConsumerRecord<String, Object> record = consumerRecord(UUID.randomUUID().toString());
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
 		when(retryHandoff.handle(record)).thenReturn(false);
 
 		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
@@ -321,11 +322,13 @@ class PaymentOperationCommandListenerTests {
 		return workerPool;
 	}
 
-	private ConsumerRecord<String, Object> consumerRecord(String key) {
-		return new ConsumerRecord<>("payment.operations.requested.v1", 0, 0L, key, new byte[] {1, 2, 3});
+	private ConsumerRecord<byte[], Object> consumerRecord(String key) {
+		return new ConsumerRecord<>(
+				"payment.operations.requested.v1", 0, 0L, key.getBytes(StandardCharsets.UTF_8), new byte[] {1, 2, 3});
 	}
 
-	private ConsumerRecord<String, Object> consumerRecord(TopicPartition partition, String key) {
-		return new ConsumerRecord<>(partition.topic(), partition.partition(), 0L, key, new byte[] {1, 2, 3});
+	private ConsumerRecord<byte[], Object> consumerRecord(TopicPartition partition, String key) {
+		return new ConsumerRecord<>(
+				partition.topic(), partition.partition(), 0L, key.getBytes(StandardCharsets.UTF_8), new byte[] {1, 2, 3});
 	}
 }

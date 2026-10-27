@@ -22,7 +22,7 @@ spring:
     consumer:
       group-id: paymentflow-processor-v1
       enable-auto-commit: false
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      key-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
       value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
       properties:
         max.poll.records: 16

@@ -9,6 +9,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,7 @@ class PaymentOperationRetryPublisher {
 
 	PaymentOperationRetryPublisher(
 			KafkaTemplate<String, Object> kafkaTemplate,
-			Schema paymentOperationRetrySchema,
+			@Qualifier("paymentOperationRetrySchema") Schema paymentOperationRetrySchema,
 			PaymentOperationRetryMessagingConfiguration.SchemaRegistryContract schemaRegistryContract) {
 		this.kafkaTemplate = kafkaTemplate;
 		this.schema = paymentOperationRetrySchema;
