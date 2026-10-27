@@ -35,6 +35,7 @@ class PspOperationService {
 
 		String decision = decisionFor(fixtureOutcome);
 		String decisionReason = decisionReasonFor(fixtureOutcome);
+		String validity = validityFor(fixtureOutcome);
 		Instant now = clock.instant();
 
 		try {
@@ -48,7 +49,7 @@ class PspOperationService {
 					decisionReason,
 					"AUTHORIZE",
 					null,
-					"ACTIVE",
+					validity,
 					now,
 					now);
 		}
@@ -64,7 +65,7 @@ class PspOperationService {
 		}
 
 		return new AuthorizeOperationResult(
-				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, "ACTIVE", now),
+				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, validity, now),
 				fixtureOutcome == PspFixtureOutcome.PROCESSING);
 	}
 
@@ -98,7 +99,7 @@ class PspOperationService {
 
 	private String decisionFor(PspFixtureOutcome fixtureOutcome) {
 		return switch (fixtureOutcome) {
-			case APPROVED, FAULT_COMMITTED_REPLY_DROPPED -> "SUCCEEDED";
+			case APPROVED, APPROVED_EXPIRED_AUTHORIZATION, FAULT_COMMITTED_REPLY_DROPPED -> "SUCCEEDED";
 			case DECLINED -> "REJECTED";
 			case NON_EXECUTED -> "FAILED";
 			case PROCESSING -> "PROCESSING";
@@ -112,5 +113,9 @@ class PspOperationService {
 			case NON_EXECUTED -> "NON_EXECUTION_CONFIRMED";
 			default -> null;
 		};
+	}
+
+	private String validityFor(PspFixtureOutcome fixtureOutcome) {
+		return fixtureOutcome == PspFixtureOutcome.APPROVED_EXPIRED_AUTHORIZATION ? "EXPIRED" : "ACTIVE";
 	}
 }

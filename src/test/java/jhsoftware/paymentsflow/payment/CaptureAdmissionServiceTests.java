@@ -44,7 +44,7 @@ class CaptureAdmissionServiceTests {
 
 		assertThatThrownBy(() -> service.admit(paymentId.toString(), "key"))
 				.isInstanceOf(PaymentNotFoundException.class);
-		verify(validityClient, never()).isAuthorizationActive(any());
+		verify(validityClient, never()).checkValidity(any());
 	}
 
 	@Test
@@ -55,7 +55,7 @@ class CaptureAdmissionServiceTests {
 
 		assertThatThrownBy(() -> service.admit(paymentId.toString(), "key"))
 				.isInstanceOf(PspStatusUnavailableException.class);
-		verify(validityClient, never()).isAuthorizationActive(any());
+		verify(validityClient, never()).checkValidity(any());
 	}
 
 	@Test
@@ -66,22 +66,22 @@ class CaptureAdmissionServiceTests {
 
 		assertThatThrownBy(() -> service.admit(paymentId.toString(), "key"))
 				.isInstanceOf(PspStatusUnavailableException.class);
-		verify(validityClient, never()).isAuthorizationActive(any());
+		verify(validityClient, never()).checkValidity(any());
 	}
 
 	@Test
-	void inactiveAuthorizationEvidenceFailsClosedWithoutTouchingTheRepositoryAdmission() {
+	void unknownAuthorizationEvidenceFailsClosedWithoutTouchingTheRepositoryAdmission() {
 		UUID paymentId = UUID.randomUUID();
 		UUID authorizationPspOperationId = UUID.randomUUID();
 		when(repository.findCaptureDerivation(MERCHANT_ID, paymentId)).thenReturn(Optional.of(
 				new CaptureAdmissionRepository.CaptureDerivation(50_000L, "BRL", authorizationPspOperationId.toString())));
 		when(requestHasher.hash(any())).thenReturn("hash");
 		when(repository.precheckAdmission(eq(MERCHANT_ID), any(), eq("hash"))).thenReturn(Optional.empty());
-		when(validityClient.isAuthorizationActive(authorizationPspOperationId)).thenReturn(false);
+		when(validityClient.checkValidity(authorizationPspOperationId)).thenReturn(AuthorizationValidityEvidence.unknown());
 
 		assertThatThrownBy(() -> service.admit(paymentId.toString(), "key"))
 				.isInstanceOf(PspStatusUnavailableException.class);
-		verify(repository, never()).admitCapture(any(), any(), any(), any());
+		verify(repository, never()).admitCapture(any(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -97,8 +97,8 @@ class CaptureAdmissionServiceTests {
 		CreatePaymentResponse response = service.admit(paymentId.toString(), "capture-key");
 
 		assertThat(response).isEqualTo(existing);
-		verify(validityClient, never()).isAuthorizationActive(any());
-		verify(repository, never()).admitCapture(any(), any(), any(), any());
+		verify(validityClient, never()).checkValidity(any());
+		verify(repository, never()).admitCapture(any(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -113,8 +113,8 @@ class CaptureAdmissionServiceTests {
 
 		assertThatThrownBy(() -> service.admit(paymentId.toString(), "capture-key"))
 				.isInstanceOf(PaymentAlreadyCapturedException.class);
-		verify(validityClient, never()).isAuthorizationActive(any());
-		verify(repository, never()).admitCapture(any(), any(), any(), any());
+		verify(validityClient, never()).checkValidity(any());
+		verify(repository, never()).admitCapture(any(), any(), any(), any(), any(), any());
 	}
 
 	@Test
@@ -125,15 +125,51 @@ class CaptureAdmissionServiceTests {
 				new CaptureAdmissionRepository.CaptureDerivation(50_000L, "BRL", authorizationPspOperationId.toString())));
 		when(requestHasher.hash(any())).thenReturn("hash");
 		when(repository.precheckAdmission(eq(MERCHANT_ID), any(), eq("hash"))).thenReturn(Optional.empty());
-		when(validityClient.isAuthorizationActive(authorizationPspOperationId)).thenReturn(true);
+		AuthorizationValidityEvidence activeEvidence =
+				new AuthorizationValidityEvidence(AuthorizationValidityStatus.ACTIVE, NOW);
+		when(validityClient.checkValidity(authorizationPspOperationId)).thenReturn(activeEvidence);
 		CreatePaymentResponse expected = new CreatePaymentResponse(paymentId, UUID.randomUUID(), "AUTHORIZED", "PENDING");
-		when(repository.admitCapture(eq(MERCHANT_ID), any(), eq("hash"), eq(NOW))).thenReturn(expected);
+		when(repository.admitCapture(
+						eq(MERCHANT_ID), any(), eq("hash"), eq(authorizationPspOperationId), eq(activeEvidence), eq(NOW)))
+				.thenReturn(expected);
 
 		CreatePaymentResponse response = service.admit(paymentId.toString(), "capture-key");
 
 		assertThat(response).isEqualTo(expected);
 		verify(requestHasher).hash(new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "capture-key"));
 		verify(repository).precheckAdmission(MERCHANT_ID, new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "capture-key"), "hash");
-		verify(repository).admitCapture(MERCHANT_ID, new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "capture-key"), "hash", NOW);
+		verify(repository).admitCapture(
+				MERCHANT_ID,
+				new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "capture-key"),
+				"hash",
+				authorizationPspOperationId,
+				activeEvidence,
+				NOW);
+	}
+
+	@Test
+	void expiredEvidenceDelegatesToRepositoryInsteadOfFailingClosed() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizationPspOperationId = UUID.randomUUID();
+		when(repository.findCaptureDerivation(MERCHANT_ID, paymentId)).thenReturn(Optional.of(
+				new CaptureAdmissionRepository.CaptureDerivation(50_000L, "BRL", authorizationPspOperationId.toString())));
+		when(requestHasher.hash(any())).thenReturn("hash");
+		when(repository.precheckAdmission(eq(MERCHANT_ID), any(), eq("hash"))).thenReturn(Optional.empty());
+		AuthorizationValidityEvidence expiredEvidence =
+				new AuthorizationValidityEvidence(AuthorizationValidityStatus.EXPIRED, NOW);
+		when(validityClient.checkValidity(authorizationPspOperationId)).thenReturn(expiredEvidence);
+		when(repository.admitCapture(
+						eq(MERCHANT_ID), any(), eq("hash"), eq(authorizationPspOperationId), eq(expiredEvidence), eq(NOW)))
+				.thenThrow(new AuthorizationExpiredException());
+
+		assertThatThrownBy(() -> service.admit(paymentId.toString(), "capture-key"))
+				.isInstanceOf(AuthorizationExpiredException.class);
+		verify(repository).admitCapture(
+				MERCHANT_ID,
+				new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "capture-key"),
+				"hash",
+				authorizationPspOperationId,
+				expiredEvidence,
+				NOW);
 	}
 }

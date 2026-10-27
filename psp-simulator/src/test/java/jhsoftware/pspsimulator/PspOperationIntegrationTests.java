@@ -110,6 +110,21 @@ class PspOperationIntegrationTests {
 	}
 
 	@Test
+	void expiredAuthorizationValidityAmountBandYieldsSucceededDecisionWithExpiredValidity() throws Exception {
+		UUID pspOperationId = UUID.randomUUID();
+		mockMvc.perform(post("/simulator/operations/authorize")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request(pspOperationId, 1680L)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result").value("SUCCEEDED"))
+				.andExpect(jsonPath("$.validity").value("EXPIRED"));
+
+		mockMvc.perform(get("/simulator/operations/{id}", pspOperationId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.validity").value("EXPIRED"));
+	}
+
+	@Test
 	void processingAmountBandYieldsAccepted() throws Exception {
 		mockMvc.perform(post("/simulator/operations/authorize")
 				.contentType(MediaType.APPLICATION_JSON)

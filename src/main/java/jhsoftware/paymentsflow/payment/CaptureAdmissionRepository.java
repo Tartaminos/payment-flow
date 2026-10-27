@@ -7,12 +7,17 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 class CaptureAdmissionRepository {
+
+	private static final ObjectMapper METADATA_MAPPER = new ObjectMapper();
 
 	private final JdbcClient jdbcClient;
 
@@ -56,6 +61,9 @@ class CaptureAdmissionRepository {
 		if (paymentStatus.equals("CAPTURED")) {
 			throw new PaymentAlreadyCapturedException();
 		}
+		if (paymentStatus.equals("EXPIRED")) {
+			throw new AuthorizationExpiredException();
+		}
 		if (!paymentStatus.equals("AUTHORIZED")) {
 			throw new PaymentNotEligibleException();
 		}
@@ -66,8 +74,14 @@ class CaptureAdmissionRepository {
 		return Optional.empty();
 	}
 
-	@Transactional
-	CreatePaymentResponse admitCapture(UUID merchantId, CaptureAdmissionCommand command, String requestHash, Instant admittedAt) {
+	@Transactional(noRollbackFor = AuthorizationExpiredException.class)
+	CreatePaymentResponse admitCapture(
+			UUID merchantId,
+			CaptureAdmissionCommand command,
+			String requestHash,
+			UUID authorizationPspOperationId,
+			AuthorizationValidityEvidence validityEvidence,
+			Instant admittedAt) {
 		lockIdempotencyScope(merchantId, command.idempotencyKey());
 
 		Optional<ExistingAdmission> existingAdmission = findExistingAdmission(merchantId, command.idempotencyKey());
@@ -84,11 +98,20 @@ class CaptureAdmissionRepository {
 		if (paymentStatus.equals("CAPTURED")) {
 			throw new PaymentAlreadyCapturedException();
 		}
+		if (paymentStatus.equals("EXPIRED")) {
+			throw new AuthorizationExpiredException();
+		}
 		if (!paymentStatus.equals("AUTHORIZED")) {
 			throw new PaymentNotEligibleException();
 		}
+
 		if (hasUnresolvedConflictingOperation(command.paymentId())) {
 			throw new PaymentOperationInProgressException();
+		}
+
+		if (validityEvidence.status() == AuthorizationValidityStatus.EXPIRED) {
+			expirePayment(merchantId, command.paymentId(), authorizationPspOperationId, validityEvidence, admittedAt);
+			throw new AuthorizationExpiredException();
 		}
 
 		UUID operationId = UUID.randomUUID();
@@ -116,6 +139,52 @@ class CaptureAdmissionRepository {
 		insertOutboxEvent(messageId, command.paymentId(), operationId, correlationId, admittedAt);
 
 		return new CreatePaymentResponse(command.paymentId(), operationId, paymentStatus, "PENDING");
+	}
+
+	private void expirePayment(
+			UUID merchantId,
+			UUID paymentId,
+			UUID authorizationPspOperationId,
+			AuthorizationValidityEvidence validityEvidence,
+			Instant now) {
+		int rowsUpdated = jdbcClient.sql("""
+				UPDATE payments
+				SET status = 'EXPIRED',
+				    version = version + 1,
+				    updated_at = :now
+				WHERE id = :paymentId
+				  AND merchant_id = :merchantId
+				  AND status = 'AUTHORIZED'
+				""")
+				.param("now", databaseTimestamp(now))
+				.param("paymentId", paymentId)
+				.param("merchantId", merchantId)
+				.update();
+
+		if (rowsUpdated == 0) {
+			return;
+		}
+
+		insertExpiryAuditEvent(
+				UUID.randomUUID(),
+				paymentId,
+				UUID.randomUUID(),
+				nextAuditSequence(paymentId),
+				expiryMetadata(authorizationPspOperationId, validityEvidence),
+				now);
+	}
+
+	private String expiryMetadata(UUID authorizationPspOperationId, AuthorizationValidityEvidence validityEvidence) {
+		try {
+			String validityEvidenceAt = validityEvidence.validityEvidenceAt() == null
+					? null
+					: validityEvidence.validityEvidenceAt().toString();
+			return METADATA_MAPPER.writeValueAsString(
+					new ExpiryEvidenceMetadata(authorizationPspOperationId.toString(), validityEvidenceAt));
+		}
+		catch (JsonProcessingException exception) {
+			throw new IllegalStateException(exception);
+		}
 	}
 
 	private void lockIdempotencyScope(UUID merchantId, String idempotencyKey) {
@@ -275,6 +344,30 @@ class CaptureAdmissionRepository {
 				.update();
 	}
 
+	private void insertExpiryAuditEvent(
+			UUID eventId,
+			UUID paymentId,
+			UUID correlationId,
+			long sequenceNumber,
+			String metadata,
+			Instant occurredAt) {
+		jdbcClient.sql("""
+				INSERT INTO payment_audit_events
+				    (event_id, payment_id, payment_operation_id, entity_type, event_type, previous_status, new_status,
+				     reason_code, source, correlation_id, causation_id, sequence_number, metadata, occurred_at, recorded_at)
+				VALUES
+				    (:eventId, :paymentId, NULL, 'PAYMENT', 'PAYMENT_EXPIRED', 'AUTHORIZED', 'EXPIRED',
+				     'PSP_AUTHORIZATION_EXPIRED', 'API', :correlationId, NULL, :sequenceNumber, CAST(:metadata AS jsonb), :occurredAt, :occurredAt)
+				""")
+				.param("eventId", eventId)
+				.param("paymentId", paymentId)
+				.param("correlationId", correlationId)
+				.param("sequenceNumber", sequenceNumber)
+				.param("metadata", metadata)
+				.param("occurredAt", databaseTimestamp(occurredAt))
+				.update();
+	}
+
 	private void insertOutboxEvent(
 			UUID messageId,
 			UUID paymentId,
@@ -306,5 +399,8 @@ class CaptureAdmissionRepository {
 	}
 
 	record ExistingAdmission(String requestHash, CreatePaymentResponse response) {
+	}
+
+	private record ExpiryEvidenceMetadata(String authorizationPspOperationId, String validityEvidenceAt) {
 	}
 }

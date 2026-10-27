@@ -46,11 +46,18 @@ class CaptureAdmissionService {
 		}
 
 		UUID authorizationPspOperationId = parseAuthorizationPspOperationId(derivation.authorizationPspReference());
-		if (!validityClient.isAuthorizationActive(authorizationPspOperationId)) {
+		AuthorizationValidityEvidence validityEvidence = validityClient.checkValidity(authorizationPspOperationId);
+		if (validityEvidence.status() == AuthorizationValidityStatus.UNKNOWN) {
 			throw new PspStatusUnavailableException();
 		}
 
-		return repository.admitCapture(properties.merchantId(), command, requestHash, clock.instant());
+		return repository.admitCapture(
+				properties.merchantId(),
+				command,
+				requestHash,
+				authorizationPspOperationId,
+				validityEvidence,
+				clock.instant());
 	}
 
 	private UUID parsePaymentId(String rawPaymentId) {

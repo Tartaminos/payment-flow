@@ -6,6 +6,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServiceUnavailable;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ import org.springframework.web.client.RestClient;
 class CaptureAuthorizationValidityClientTests {
 
 	@Test
-	void activeEvidenceYieldsAuthorizationActive() {
+	void activeEvidenceYieldsActiveStatusWithEvidenceTimestamp() {
 		UUID authorizationPspOperationId = UUID.randomUUID();
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -31,15 +32,16 @@ class CaptureAuthorizationValidityClientTests {
 								.formatted(authorizationPspOperationId),
 						MediaType.APPLICATION_JSON));
 
-		boolean active = new CaptureAuthorizationValidityClient(builder.build())
-				.isAuthorizationActive(authorizationPspOperationId);
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(builder.build())
+				.checkValidity(authorizationPspOperationId);
 
-		assertThat(active).isTrue();
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.ACTIVE);
+		assertThat(evidence.validityEvidenceAt()).isEqualTo(Instant.parse("2026-10-27T10:00:00Z"));
 		server.verify();
 	}
 
 	@Test
-	void expiredEvidenceYieldsAuthorizationNotActive() {
+	void expiredEvidenceYieldsExpiredStatusWithEvidenceTimestamp() {
 		UUID authorizationPspOperationId = UUID.randomUUID();
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -51,14 +53,15 @@ class CaptureAuthorizationValidityClientTests {
 								.formatted(authorizationPspOperationId),
 						MediaType.APPLICATION_JSON));
 
-		boolean active = new CaptureAuthorizationValidityClient(builder.build())
-				.isAuthorizationActive(authorizationPspOperationId);
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(builder.build())
+				.checkValidity(authorizationPspOperationId);
 
-		assertThat(active).isFalse();
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.EXPIRED);
+		assertThat(evidence.validityEvidenceAt()).isEqualTo(Instant.parse("2026-10-27T10:00:00Z"));
 	}
 
 	@Test
-	void missingValidityFieldYieldsAuthorizationNotActive() {
+	void missingValidityFieldYieldsUnknownStatus() {
 		UUID authorizationPspOperationId = UUID.randomUUID();
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -70,14 +73,33 @@ class CaptureAuthorizationValidityClientTests {
 								.formatted(authorizationPspOperationId),
 						MediaType.APPLICATION_JSON));
 
-		boolean active = new CaptureAuthorizationValidityClient(builder.build())
-				.isAuthorizationActive(authorizationPspOperationId);
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(builder.build())
+				.checkValidity(authorizationPspOperationId);
 
-		assertThat(active).isFalse();
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.UNKNOWN);
 	}
 
 	@Test
-	void notFoundResponseYieldsAuthorizationNotActive() {
+	void unrecognizedValidityValueYieldsUnknownStatus() {
+		UUID authorizationPspOperationId = UUID.randomUUID();
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		server.expect(requestTo("/simulator/operations/" + authorizationPspOperationId))
+				.andRespond(withSuccess(
+						"""
+						{"pspOperationId":"%s","result":"SUCCEEDED","reasonCode":null,"validity":"SOMETHING_ELSE","validityEvidenceAt":null}
+						"""
+								.formatted(authorizationPspOperationId),
+						MediaType.APPLICATION_JSON));
+
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(builder.build())
+				.checkValidity(authorizationPspOperationId);
+
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.UNKNOWN);
+	}
+
+	@Test
+	void notFoundResponseYieldsUnknownStatus() {
 		UUID authorizationPspOperationId = UUID.randomUUID();
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -86,33 +108,33 @@ class CaptureAuthorizationValidityClientTests {
 						.contentType(MediaType.APPLICATION_JSON)
 						.body("{\"code\":\"PSP_OPERATION_NOT_FOUND\"}"));
 
-		boolean active = new CaptureAuthorizationValidityClient(builder.build())
-				.isAuthorizationActive(authorizationPspOperationId);
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(builder.build())
+				.checkValidity(authorizationPspOperationId);
 
-		assertThat(active).isFalse();
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.UNKNOWN);
 	}
 
 	@Test
-	void serviceUnavailableResponseYieldsAuthorizationNotActive() {
+	void serviceUnavailableResponseYieldsUnknownStatus() {
 		UUID authorizationPspOperationId = UUID.randomUUID();
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		server.expect(requestTo("/simulator/operations/" + authorizationPspOperationId))
 				.andRespond(withServiceUnavailable());
 
-		boolean active = new CaptureAuthorizationValidityClient(builder.build())
-				.isAuthorizationActive(authorizationPspOperationId);
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(builder.build())
+				.checkValidity(authorizationPspOperationId);
 
-		assertThat(active).isFalse();
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.UNKNOWN);
 	}
 
 	@Test
-	void unreachableServerYieldsAuthorizationNotActive() {
+	void unreachableServerYieldsUnknownStatus() {
 		RestClient restClient = RestClient.builder().baseUrl("http://127.0.0.1:1").build();
 
-		boolean active = new CaptureAuthorizationValidityClient(restClient)
-				.isAuthorizationActive(UUID.randomUUID());
+		AuthorizationValidityEvidence evidence = new CaptureAuthorizationValidityClient(restClient)
+				.checkValidity(UUID.randomUUID());
 
-		assertThat(active).isFalse();
+		assertThat(evidence.status()).isEqualTo(AuthorizationValidityStatus.UNKNOWN);
 	}
 }

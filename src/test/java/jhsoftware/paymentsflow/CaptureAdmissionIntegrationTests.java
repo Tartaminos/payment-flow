@@ -91,6 +91,17 @@ class CaptureAdmissionIntegrationTests {
 						MediaType.APPLICATION_JSON));
 	}
 
+	private void stubAuthorizationExpired(UUID authorizationPspOperationId) {
+		pspValidityServer.expect(requestTo("/simulator/operations/" + authorizationPspOperationId))
+				.andExpect(method(HttpMethod.GET))
+				.andRespond(withSuccess(
+						"""
+						{"pspOperationId":"%s","result":"SUCCEEDED","reasonCode":null,"validity":"EXPIRED","validityEvidenceAt":"2026-10-27T10:00:00Z"}
+						"""
+								.formatted(authorizationPspOperationId),
+						MediaType.APPLICATION_JSON));
+	}
+
 	@Test
 	void unknownPaymentIdReturnsNotFoundWithoutPersistence() throws Exception {
 		performCapture(UUID.randomUUID().toString(), "key").andExpect(status().isNotFound())
@@ -262,6 +273,36 @@ class CaptureAdmissionIntegrationTests {
 				.andExpect(jsonPath("$.code").value("PAYMENT_ALREADY_CAPTURED"));
 
 		assertTableCountsZero();
+	}
+
+	@Test
+	void expiredPspEvidenceTransitionsPaymentToExpiredAndReturnsConflictWithoutAnyCaptureSideEffects() throws Exception {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizeOperationId = UUID.randomUUID();
+		seedPayment(paymentId, "AUTHORIZED", 50_000L, "BRL");
+		seedOperation(authorizeOperationId, paymentId, "AUTHORIZE", "SUCCEEDED", authorizeOperationId.toString());
+		stubAuthorizationExpired(authorizeOperationId);
+
+		performCapture(paymentId.toString(), "expired-key")
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("AUTHORIZATION_EXPIRED"));
+
+		assertThat(jdbcTemplate.queryForObject(
+						"SELECT status FROM payments WHERE id = ?", String.class, paymentId))
+				.isEqualTo("EXPIRED");
+		assertThat(jdbcTemplate.queryForObject(
+						"SELECT count(*) FROM payment_audit_events WHERE payment_id = ? AND event_type = 'PAYMENT_EXPIRED'",
+						Long.class,
+						paymentId))
+				.isEqualTo(1L);
+		assertThat(jdbcTemplate.queryForObject(
+						"SELECT count(*) FROM payment_operations WHERE payment_id = ? AND type = 'CAPTURE'",
+						Long.class,
+						paymentId))
+				.isEqualTo(0L);
+		assertThat(jdbcTemplate.queryForObject(
+						"SELECT count(*) FROM outbox_events WHERE payment_id = ?", Long.class, paymentId))
+				.isEqualTo(0L);
 	}
 
 	@Test

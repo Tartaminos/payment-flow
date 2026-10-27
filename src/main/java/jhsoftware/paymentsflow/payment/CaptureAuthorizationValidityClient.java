@@ -20,16 +20,16 @@ class CaptureAuthorizationValidityClient {
 		this.restClient = captureAuthorizationValidityRestClient;
 	}
 
-	boolean isAuthorizationActive(UUID authorizationPspOperationId) {
+	AuthorizationValidityEvidence checkValidity(UUID authorizationPspOperationId) {
 		try {
 			return restClient.get()
 					.uri("/simulator/operations/{id}", authorizationPspOperationId)
 					.exchange((clientRequest, response) -> {
 						if (!response.getStatusCode().is2xxSuccessful()) {
-							return false;
+							return AuthorizationValidityEvidence.unknown();
 						}
 						CaptureValidityResponseBody body = response.bodyTo(CaptureValidityResponseBody.class);
-						return body != null && "ACTIVE".equals(body.validity());
+						return toEvidence(body);
 					});
 		}
 		catch (RestClientResponseException exception) {
@@ -37,14 +37,25 @@ class CaptureAuthorizationValidityClient {
 					"PSP authorization validity lookup for operation {} returned an unexpected status {}",
 					authorizationPspOperationId,
 					exception.getStatusCode());
-			return false;
+			return AuthorizationValidityEvidence.unknown();
 		}
 		catch (ResourceAccessException exception) {
 			logger.warn(
 					"PSP authorization validity lookup for operation {} could not be confirmed ({})",
 					authorizationPspOperationId,
 					exception.getMessage());
-			return false;
+			return AuthorizationValidityEvidence.unknown();
 		}
+	}
+
+	private AuthorizationValidityEvidence toEvidence(CaptureValidityResponseBody body) {
+		if (body == null || body.validity() == null) {
+			return AuthorizationValidityEvidence.unknown();
+		}
+		return switch (body.validity()) {
+			case "ACTIVE" -> new AuthorizationValidityEvidence(AuthorizationValidityStatus.ACTIVE, body.validityEvidenceAt());
+			case "EXPIRED" -> new AuthorizationValidityEvidence(AuthorizationValidityStatus.EXPIRED, body.validityEvidenceAt());
+			default -> AuthorizationValidityEvidence.unknown();
+		};
 	}
 }

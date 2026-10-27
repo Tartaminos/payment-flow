@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 class AmountMinorFixtureOutcomeSelector {
 
 	private static final long BAND_SIZE = 1000L;
+	private static final long APPROVED_EXPIRED_AUTHORIZATION_BAND_START = 650L;
 	private static final long DECLINED_BAND_START = 700L;
 	private static final long NON_EXECUTED_BAND_START = 800L;
 	private static final long PROCESSING_BAND_START = 850L;
@@ -28,6 +29,9 @@ class AmountMinorFixtureOutcomeSelector {
 		}
 		if (band >= DECLINED_BAND_START) {
 			return PspFixtureOutcome.DECLINED;
+		}
+		if (band >= APPROVED_EXPIRED_AUTHORIZATION_BAND_START) {
+			return PspFixtureOutcome.APPROVED_EXPIRED_AUTHORIZATION;
 		}
 		return PspFixtureOutcome.APPROVED;
 	}

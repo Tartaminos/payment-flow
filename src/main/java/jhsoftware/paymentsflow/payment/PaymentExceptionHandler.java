@@ -43,6 +43,9 @@ class PaymentExceptionHandler {
 	private static final ApiError PSP_STATUS_UNAVAILABLE = new ApiError(
 			"PSP_STATUS_UNAVAILABLE",
 			"The PSP could not confirm the authorization is still active.");
+	private static final ApiError AUTHORIZATION_EXPIRED = new ApiError(
+			"AUTHORIZATION_EXPIRED",
+			"The authorization has expired and can no longer be captured.");
 
 	@ExceptionHandler({
 			InvalidPaymentRequestException.class,
@@ -84,6 +87,11 @@ class PaymentExceptionHandler {
 	@ExceptionHandler(PaymentOperationInProgressException.class)
 	ResponseEntity<ApiError> paymentOperationInProgress() {
 		return ResponseEntity.status(HttpStatus.CONFLICT).body(PAYMENT_OPERATION_IN_PROGRESS);
+	}
+
+	@ExceptionHandler(AuthorizationExpiredException.class)
+	ResponseEntity<ApiError> authorizationExpired() {
+		return ResponseEntity.status(HttpStatus.CONFLICT).body(AUTHORIZATION_EXPIRED);
 	}
 
 	@ExceptionHandler(PspStatusUnavailableException.class)

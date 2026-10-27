@@ -32,6 +32,10 @@ class CaptureAdmissionRepositoryTests {
 	private static final String HASH_1 = "1".repeat(64);
 	private static final String HASH_A = "a".repeat(64);
 	private static final String HASH_B = "b".repeat(64);
+	private static final AuthorizationValidityEvidence ACTIVE_EVIDENCE =
+			new AuthorizationValidityEvidence(AuthorizationValidityStatus.ACTIVE, NOW);
+	private static final AuthorizationValidityEvidence EXPIRED_EVIDENCE =
+			new AuthorizationValidityEvidence(AuthorizationValidityStatus.EXPIRED, NOW);
 
 	@Container
 	static final PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:17-alpine");
@@ -106,7 +110,7 @@ class CaptureAdmissionRepositoryTests {
 		seedOperation(UUID.randomUUID(), paymentId, "AUTHORIZE", "SUCCEEDED", UUID.randomUUID().toString());
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "capture-key-1");
-		CreatePaymentResponse response = repository.admitCapture(MERCHANT_ID, command, HASH_1, NOW);
+		CreatePaymentResponse response = repository.admitCapture(MERCHANT_ID, command, HASH_1, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW);
 
 		assertThat(response.paymentId()).isEqualTo(paymentId);
 		assertThat(response.status()).isEqualTo("AUTHORIZED");
@@ -126,9 +130,9 @@ class CaptureAdmissionRepositoryTests {
 		seedOperation(UUID.randomUUID(), paymentId, "AUTHORIZE", "SUCCEEDED", UUID.randomUUID().toString());
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "replay-key");
-		CreatePaymentResponse original = repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW);
+		CreatePaymentResponse original = repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW);
 
-		CreatePaymentResponse replay = repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW.plusSeconds(5));
+		CreatePaymentResponse replay = repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW.plusSeconds(5));
 
 		assertThat(replay).isEqualTo(original);
 		assertThat(countRows("payment_operations", "payment_id = ? AND type = 'CAPTURE'", paymentId)).isEqualTo(1);
@@ -141,9 +145,9 @@ class CaptureAdmissionRepositoryTests {
 		seedOperation(UUID.randomUUID(), paymentId, "AUTHORIZE", "SUCCEEDED", UUID.randomUUID().toString());
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "conflict-key");
-		repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW);
+		repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW);
 
-		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_B, NOW))
+		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_B, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW))
 				.isInstanceOf(IdempotencyKeyConflictException.class);
 	}
 
@@ -151,7 +155,7 @@ class CaptureAdmissionRepositoryTests {
 	void unknownPaymentIsRejected() {
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(UUID.randomUUID(), 50_000L, "BRL", "key");
 
-		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW))
+		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW))
 				.isInstanceOf(PaymentNotFoundException.class);
 	}
 
@@ -162,7 +166,7 @@ class CaptureAdmissionRepositoryTests {
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "new-key");
 
-		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW))
+		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW))
 				.isInstanceOf(PaymentAlreadyCapturedException.class);
 	}
 
@@ -173,7 +177,7 @@ class CaptureAdmissionRepositoryTests {
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "new-key");
 
-		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW))
+		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW))
 				.isInstanceOf(PaymentNotEligibleException.class);
 	}
 
@@ -186,8 +190,97 @@ class CaptureAdmissionRepositoryTests {
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "another-key");
 
-		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW))
+		assertThatThrownBy(() -> repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW))
 				.isInstanceOf(PaymentOperationInProgressException.class);
+	}
+
+	@Test
+	void expiredEvidenceTransitionsAuthorizedPaymentToExpiredWithAuditAndCreatesNoCaptureIdempotencyOrOutboxRows() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizationPspOperationId = UUID.randomUUID();
+		seedPayment(paymentId, "AUTHORIZED", 50_000L, "BRL");
+		seedOperation(authorizationPspOperationId, paymentId, "AUTHORIZE", "SUCCEEDED", authorizationPspOperationId.toString());
+
+		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "expired-key");
+
+		assertThatThrownBy(() -> repository.admitCapture(
+						MERCHANT_ID, command, HASH_A, authorizationPspOperationId, EXPIRED_EVIDENCE, NOW))
+				.isInstanceOf(AuthorizationExpiredException.class);
+
+		assertThat(jdbcClient.sql("SELECT status FROM payments WHERE id = :paymentId")
+				.param("paymentId", paymentId)
+				.query(String.class)
+				.single())
+				.isEqualTo("EXPIRED");
+		assertThat(countRows("payment_operations", "payment_id = ? AND type = 'CAPTURE'", paymentId)).isEqualTo(0);
+		assertThat(countRows("idempotency_keys", "payment_id = ?", paymentId)).isEqualTo(0);
+		assertThat(countRows("outbox_events", "payment_id = ?", paymentId)).isEqualTo(0);
+		assertThat(countRows(
+						"payment_audit_events",
+						"payment_id = ? AND event_type = 'PAYMENT_EXPIRED' AND reason_code = 'PSP_AUTHORIZATION_EXPIRED'",
+						paymentId))
+				.isEqualTo(1);
+		assertThat(jdbcClient.sql(
+						"SELECT metadata ->> 'authorizationPspOperationId' FROM payment_audit_events WHERE payment_id = :paymentId")
+				.param("paymentId", paymentId)
+				.query(String.class)
+				.single())
+				.isEqualTo(authorizationPspOperationId.toString());
+	}
+
+	@Test
+	void existingUnresolvedCaptureOperationBlocksExpiredEvidenceTransition() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizationPspOperationId = UUID.randomUUID();
+		seedPayment(paymentId, "AUTHORIZED", 50_000L, "BRL");
+		seedOperation(authorizationPspOperationId, paymentId, "AUTHORIZE", "SUCCEEDED", authorizationPspOperationId.toString());
+		seedOperation(UUID.randomUUID(), paymentId, "CAPTURE", "UNKNOWN", UUID.randomUUID().toString());
+
+		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "blocked-key");
+
+		assertThatThrownBy(() -> repository.admitCapture(
+						MERCHANT_ID, command, HASH_A, authorizationPspOperationId, EXPIRED_EVIDENCE, NOW))
+				.isInstanceOf(PaymentOperationInProgressException.class);
+
+		assertThat(jdbcClient.sql("SELECT status FROM payments WHERE id = :paymentId")
+				.param("paymentId", paymentId)
+				.query(String.class)
+				.single())
+				.isEqualTo("AUTHORIZED");
+		assertThat(countRows("payment_audit_events", "payment_id = ? AND event_type = 'PAYMENT_EXPIRED'", paymentId))
+				.isEqualTo(0);
+	}
+
+	@Test
+	void alreadyExpiredPaymentIsRejectedOnAdmitCapture() {
+		UUID paymentId = UUID.randomUUID();
+		seedPayment(paymentId, "EXPIRED", 50_000L, "BRL");
+
+		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "new-key");
+
+		assertThatThrownBy(() -> repository.admitCapture(
+						MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW))
+				.isInstanceOf(AuthorizationExpiredException.class);
+	}
+
+	@Test
+	void confirmedCapturedPaymentIsNeverOverwrittenByStaleExpiredEvidence() {
+		UUID paymentId = UUID.randomUUID();
+		UUID authorizationPspOperationId = UUID.randomUUID();
+		seedPayment(paymentId, "CAPTURED", 50_000L, "BRL");
+
+		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "race-key");
+
+		assertThatThrownBy(() -> repository.admitCapture(
+						MERCHANT_ID, command, HASH_A, authorizationPspOperationId, EXPIRED_EVIDENCE, NOW))
+				.isInstanceOf(PaymentAlreadyCapturedException.class);
+
+		assertThat(jdbcClient.sql("SELECT status FROM payments WHERE id = :paymentId")
+				.param("paymentId", paymentId)
+				.query(String.class)
+				.single())
+				.isEqualTo("CAPTURED");
+		assertThat(countRows("payment_audit_events", "payment_id = ?", paymentId)).isEqualTo(0);
 	}
 
 	@Test
@@ -208,7 +301,7 @@ class CaptureAdmissionRepositoryTests {
 		seedOperation(UUID.randomUUID(), paymentId, "AUTHORIZE", "SUCCEEDED", UUID.randomUUID().toString());
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "precheck-replay-key");
-		CreatePaymentResponse original = repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW);
+		CreatePaymentResponse original = repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW);
 
 		Optional<CreatePaymentResponse> precheck = repository.precheckAdmission(MERCHANT_ID, command, HASH_A);
 
@@ -223,7 +316,7 @@ class CaptureAdmissionRepositoryTests {
 		seedOperation(UUID.randomUUID(), paymentId, "AUTHORIZE", "SUCCEEDED", UUID.randomUUID().toString());
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "precheck-terminal-key");
-		CreatePaymentResponse original = repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW);
+		CreatePaymentResponse original = repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW);
 
 		jdbcClient.sql("UPDATE payment_operations SET status = 'SUCCEEDED' WHERE id = :operationId")
 				.param("operationId", original.operationId())
@@ -246,7 +339,7 @@ class CaptureAdmissionRepositoryTests {
 		seedOperation(UUID.randomUUID(), paymentId, "AUTHORIZE", "SUCCEEDED", UUID.randomUUID().toString());
 
 		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "precheck-conflict-key");
-		repository.admitCapture(MERCHANT_ID, command, HASH_A, NOW);
+		repository.admitCapture(MERCHANT_ID, command, HASH_A, UUID.randomUUID(), ACTIVE_EVIDENCE, NOW);
 
 		assertThatThrownBy(() -> repository.precheckAdmission(MERCHANT_ID, command, HASH_B))
 				.isInstanceOf(IdempotencyKeyConflictException.class);
@@ -280,6 +373,17 @@ class CaptureAdmissionRepositoryTests {
 
 		assertThatThrownBy(() -> repository.precheckAdmission(MERCHANT_ID, command, HASH_A))
 				.isInstanceOf(PaymentNotEligibleException.class);
+	}
+
+	@Test
+	void precheckAdmissionRejectsAlreadyExpiredPaymentWithoutCallingThePsp() {
+		UUID paymentId = UUID.randomUUID();
+		seedPayment(paymentId, "EXPIRED", 50_000L, "BRL");
+
+		CaptureAdmissionCommand command = new CaptureAdmissionCommand(paymentId, 50_000L, "BRL", "new-key");
+
+		assertThatThrownBy(() -> repository.precheckAdmission(MERCHANT_ID, command, HASH_A))
+				.isInstanceOf(AuthorizationExpiredException.class);
 	}
 
 	@Test

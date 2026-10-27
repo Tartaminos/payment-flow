@@ -2,6 +2,7 @@ package jhsoftware.pspsimulator;
 
 enum PspFixtureOutcome {
 	APPROVED,
+	APPROVED_EXPIRED_AUTHORIZATION,
 	DECLINED,
 	NON_EXECUTED,
 	PROCESSING,
