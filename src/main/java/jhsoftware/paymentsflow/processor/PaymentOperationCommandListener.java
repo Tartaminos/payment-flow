@@ -3,7 +3,6 @@ package jhsoftware.paymentsflow.processor;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -19,17 +18,17 @@ class PaymentOperationCommandListener {
 
 	static final String LISTENER_ID = "payment-operation-command-listener";
 
-	private final PaymentOperationProcessor processor;
+	private final PaymentOperationTechnicalRetryHandoff retryHandoff;
 	private final PaymentWorkAdmission admission;
 	private final PaymentOperationWorkerPool workerPool;
 	private final BlockedPartitionDiagnostics blockedPartitionDiagnostics;
 
 	PaymentOperationCommandListener(
-			PaymentOperationProcessor processor,
+			PaymentOperationTechnicalRetryHandoff retryHandoff,
 			PaymentWorkAdmission admission,
 			PaymentOperationWorkerPool workerPool,
 			BlockedPartitionDiagnostics blockedPartitionDiagnostics) {
-		this.processor = processor;
+		this.retryHandoff = retryHandoff;
 		this.admission = admission;
 		this.workerPool = workerPool;
 		this.blockedPartitionDiagnostics = blockedPartitionDiagnostics;
@@ -61,8 +60,7 @@ class PaymentOperationCommandListener {
 
 	private void runAndRelease(QueuedCommand command) {
 		try {
-			boolean ackEligible = processor.process(
-					command.record().key(), (GenericRecord) command.record().value());
+			boolean ackEligible = retryHandoff.handle(command.record());
 			if (ackEligible) {
 				blockedPartitionDiagnostics.recordEligible(command.partition());
 			}

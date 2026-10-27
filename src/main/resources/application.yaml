@@ -23,10 +23,8 @@ spring:
       group-id: paymentflow-processor-v1
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
       properties:
-        schema.registry.url: ${SCHEMA_REGISTRY_URL:http://localhost:8082}
-        specific.avro.reader: false
         max.poll.records: 16
 
 paymentflow:

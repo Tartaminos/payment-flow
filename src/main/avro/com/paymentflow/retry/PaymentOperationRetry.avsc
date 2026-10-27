@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "PaymentOperationRetry",
+  "namespace": "com.paymentflow.retry",
+  "fields": [
+    {"name": "retryId", "type": {"type": "string", "logicalType": "uuid"}},
+    {"name": "sourceTopic", "type": "string"},
+    {"name": "sourcePartition", "type": "int"},
+    {"name": "sourceOffset", "type": "long"},
+    {"name": "sourceRecordKey", "type": "bytes"},
+    {"name": "sourceRecordValue", "type": "bytes"},
+    {"name": "failureClass", "type": "string"},
+    {"name": "failedAt", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+    {"name": "operationId", "type": ["null", {"type": "string", "logicalType": "uuid"}], "default": null},
+    {"name": "correlationId", "type": ["null", {"type": "string", "logicalType": "uuid"}], "default": null},
+    {"name": "sourceMessageId", "type": ["null", {"type": "string", "logicalType": "uuid"}], "default": null}
+  ]
+}
