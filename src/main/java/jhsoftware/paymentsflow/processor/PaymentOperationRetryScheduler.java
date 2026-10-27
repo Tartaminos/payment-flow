@@ -11,6 +11,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
+
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PaymentOperationRetryScheduler {
@@ -42,6 +44,9 @@ class PaymentOperationRetryScheduler {
 					record.topic(), rawValue, PaymentOperationRetryMessagingConfiguration.SUBJECT);
 			retryEnvelope = retryEnvelopeDecoder.decode(retryRecord);
 			validateRetryKey(record.key(), retryEnvelope);
+			CorrelationContext.put(CorrelationContext.RETRY_ID, retryEnvelope.retryId());
+			CorrelationContext.put(CorrelationContext.CORRELATION_ID, retryEnvelope.correlationId());
+			CorrelationContext.put(CorrelationContext.OPERATION_ID, retryEnvelope.operationId());
 
 			int sourceSchemaId = rawValueDecoder.schemaId(retryEnvelope.sourceRecordValue());
 			GenericRecord sourceRecord = rawValueDecoder.decode(

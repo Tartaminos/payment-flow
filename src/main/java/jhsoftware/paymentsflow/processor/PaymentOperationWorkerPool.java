@@ -1,10 +1,12 @@
 package jhsoftware.paymentsflow.processor;
 
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PreDestroy;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +23,20 @@ class PaymentOperationWorkerPool {
 	}
 
 	void submit(Runnable task) {
-		executor.execute(task);
+		Map<String, String> callerContext = MDC.getCopyOfContextMap();
+		executor.execute(() -> runWithPropagatedContext(task, callerContext));
+	}
+
+	private void runWithPropagatedContext(Runnable task, Map<String, String> callerContext) {
+		try {
+			if (callerContext != null) {
+				MDC.setContextMap(callerContext);
+			}
+			task.run();
+		}
+		finally {
+			MDC.clear();
+		}
 	}
 
 	@PreDestroy

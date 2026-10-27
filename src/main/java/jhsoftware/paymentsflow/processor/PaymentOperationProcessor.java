@@ -4,15 +4,20 @@ import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.avro.generic.GenericRecord;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import jhsoftware.paymentsflow.observability.CorrelationContext;
 
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PaymentOperationProcessor {
 
 	private static final String UNKNOWN_STATUS = "UNKNOWN";
+	private static final String DUPLICATE_REPLAY_METRIC = "paymentflow.duplicate.replay";
 
 	private final PaymentOperationCommandDecoder decoder;
 	private final PaymentOperationProcessingRepository repository;
@@ -21,6 +26,7 @@ class PaymentOperationProcessor {
 	private final PaymentOperationVoidAttemptExecutor voidAttemptExecutor;
 	private final ReconciliationScannerHealth scannerHealth;
 	private final Clock clock;
+	private final MeterRegistry meterRegistry;
 
 	PaymentOperationProcessor(
 			PaymentOperationCommandDecoder decoder,
@@ -29,7 +35,8 @@ class PaymentOperationProcessor {
 			PaymentOperationCaptureAttemptExecutor captureAttemptExecutor,
 			PaymentOperationVoidAttemptExecutor voidAttemptExecutor,
 			ReconciliationScannerHealth scannerHealth,
-			Clock clock) {
+			Clock clock,
+			MeterRegistry meterRegistry) {
 		this.decoder = decoder;
 		this.repository = repository;
 		this.attemptExecutor = attemptExecutor;
@@ -37,10 +44,14 @@ class PaymentOperationProcessor {
 		this.voidAttemptExecutor = voidAttemptExecutor;
 		this.scannerHealth = scannerHealth;
 		this.clock = clock;
+		this.meterRegistry = meterRegistry;
 	}
 
 	boolean process(String recordKey, GenericRecord recordValue) {
 		PaymentOperationCommand command = decoder.decode(recordValue);
+		CorrelationContext.put(CorrelationContext.CORRELATION_ID, command.correlationId());
+		CorrelationContext.put(CorrelationContext.OPERATION_ID, command.operationId());
+		CorrelationContext.put(CorrelationContext.MESSAGE_ID, command.messageId());
 
 		Optional<PaymentOperationContext> contextOptional = repository.loadContext(command.operationId());
 		if (contextOptional.isEmpty()) {
@@ -54,6 +65,8 @@ class PaymentOperationProcessor {
 		}
 
 		if (context.isFinalized()) {
+			String source = command.causationId() == null ? "KAFKA_REDELIVERY" : "OUTBOX_REPUBLISH";
+			Counter.builder(DUPLICATE_REPLAY_METRIC).tag("source", source).register(meterRegistry).increment();
 			return true;
 		}
 

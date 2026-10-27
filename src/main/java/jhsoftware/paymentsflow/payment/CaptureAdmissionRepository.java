@@ -14,6 +14,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
+
 @Repository
 class CaptureAdmissionRepository {
 
@@ -120,25 +122,34 @@ class CaptureAdmissionRepository {
 		UUID messageId = UUID.randomUUID();
 		UUID correlationId = UUID.randomUUID();
 
-		insertOperation(operationId, command.paymentId(), command.amountMinor(), admittedAt);
-		insertIdempotencyKey(
-				idempotencyId,
-				merchantId,
-				command.idempotencyKey(),
-				requestHash,
-				command.paymentId(),
-				operationId,
-				admittedAt);
-		insertAuditEvent(
-				eventId,
-				command.paymentId(),
-				operationId,
-				correlationId,
-				nextAuditSequence(command.paymentId()),
-				admittedAt);
-		insertOutboxEvent(messageId, command.paymentId(), operationId, correlationId, admittedAt);
+		try {
+			CorrelationContext.put(CorrelationContext.CORRELATION_ID, correlationId);
+			CorrelationContext.put(CorrelationContext.PAYMENT_ID, command.paymentId());
+			CorrelationContext.put(CorrelationContext.OPERATION_ID, operationId);
 
-		return new CreatePaymentResponse(command.paymentId(), operationId, paymentStatus, "PENDING");
+			insertOperation(operationId, command.paymentId(), command.amountMinor(), admittedAt);
+			insertIdempotencyKey(
+					idempotencyId,
+					merchantId,
+					command.idempotencyKey(),
+					requestHash,
+					command.paymentId(),
+					operationId,
+					admittedAt);
+			insertAuditEvent(
+					eventId,
+					command.paymentId(),
+					operationId,
+					correlationId,
+					nextAuditSequence(command.paymentId()),
+					admittedAt);
+			insertOutboxEvent(messageId, command.paymentId(), operationId, correlationId, admittedAt);
+
+			return new CreatePaymentResponse(command.paymentId(), operationId, paymentStatus, "PENDING");
+		}
+		finally {
+			CorrelationContext.clear();
+		}
 	}
 
 	private void expirePayment(

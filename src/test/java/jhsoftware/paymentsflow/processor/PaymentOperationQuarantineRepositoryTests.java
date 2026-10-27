@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +31,7 @@ class PaymentOperationQuarantineRepositoryTests {
 	private static HikariDataSource dataSource;
 	private JdbcClient jdbcClient;
 	private PaymentOperationQuarantineRepository repository;
+	private SimpleMeterRegistry meterRegistry;
 
 	@BeforeAll
 	void migrate() {
@@ -49,7 +51,8 @@ class PaymentOperationQuarantineRepositoryTests {
 	@BeforeEach
 	void setUp() {
 		jdbcClient = JdbcClient.create(dataSource);
-		repository = new PaymentOperationQuarantineRepository(jdbcClient);
+		meterRegistry = new SimpleMeterRegistry();
+		repository = new PaymentOperationQuarantineRepository(jdbcClient, meterRegistry);
 	}
 
 	@AfterEach
@@ -66,6 +69,9 @@ class PaymentOperationQuarantineRepositoryTests {
 
 		assertThat(jdbcClient.sql("SELECT count(*) FROM quarantined_commands")
 				.query(Long.class).single()).isEqualTo(1L);
+		assertThat(meterRegistry.get("paymentflow.dlq.entries")
+				.tag("failure_code", PoisonFailureCode.INVALID_AVRO_PAYLOAD.name())
+				.counter().count()).isEqualTo(2.0);
 	}
 
 	@Test

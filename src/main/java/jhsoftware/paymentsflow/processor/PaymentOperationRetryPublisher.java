@@ -14,6 +14,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
+
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PaymentOperationRetryPublisher {
@@ -33,6 +35,9 @@ class PaymentOperationRetryPublisher {
 	}
 
 	boolean publish(PaymentOperationRetryEnvelope envelope) {
+		CorrelationContext.put(CorrelationContext.RETRY_ID, envelope.retryId());
+		CorrelationContext.put(CorrelationContext.CORRELATION_ID, envelope.correlationId());
+		CorrelationContext.put(CorrelationContext.OPERATION_ID, envelope.operationId());
 		try {
 			kafkaTemplate.send(
 					PaymentOperationRetryMessagingConfiguration.TOPIC,

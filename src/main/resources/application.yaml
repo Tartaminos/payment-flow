@@ -1,3 +1,18 @@
+logging:
+  structured:
+    format:
+      console: ecs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
 spring:
   application:
     name: paymentsflow
@@ -66,3 +81,9 @@ paymentflow:
       poll-interval: 2s
       batch-max: 20
       claim-lease: 60s
+  retention:
+    cleanup:
+      enabled: false
+      dry-run: true
+      financial-retention: P5Y
+      cron: "0 0 3 1 * *"

@@ -5,7 +5,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -16,6 +19,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
+
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class OutboxPublisher {
@@ -23,6 +28,7 @@ class OutboxPublisher {
 	private static final Logger logger = LoggerFactory.getLogger(OutboxPublisher.class);
 	private static final String COMMAND_TYPE = "ExecutePaymentOperation";
 	private static final int MAX_BACKOFF_SHIFT = 30;
+	private static final String PUBLICATION_DURATION_METRIC = "paymentflow.publication.duration";
 
 	private final OutboxPublicationRepository repository;
 	private final KafkaTemplate<String, Object> kafkaTemplate;
@@ -30,6 +36,9 @@ class OutboxPublisher {
 	private final OutboxMessagingProperties properties;
 	private final Clock clock;
 	private final UUID workerId;
+	private final Timer publicationDurationTimer;
+	private final AtomicLong pendingCount = new AtomicLong();
+	private final AtomicLong oldestPendingAgeSeconds = new AtomicLong();
 
 	OutboxPublisher(
 			OutboxPublicationRepository repository,
@@ -37,13 +46,17 @@ class OutboxPublisher {
 			Schema executePaymentOperationSchema,
 			OutboxMessagingConfiguration.SchemaRegistryContract schemaRegistryContract,
 			OutboxMessagingProperties properties,
-			Clock clock) {
+			Clock clock,
+			MeterRegistry meterRegistry) {
 		this.repository = repository;
 		this.kafkaTemplate = kafkaTemplate;
 		this.schema = executePaymentOperationSchema;
 		this.properties = properties;
 		this.clock = clock;
 		this.workerId = UUID.randomUUID();
+		this.publicationDurationTimer = Timer.builder(PUBLICATION_DURATION_METRIC).register(meterRegistry);
+		meterRegistry.gauge("paymentflow.outbox.pending", pendingCount);
+		meterRegistry.gauge("paymentflow.outbox.oldest.pending.seconds", oldestPendingAgeSeconds);
 	}
 
 	@Scheduled(
@@ -52,6 +65,7 @@ class OutboxPublisher {
 	void publishPending() {
 		Instant now = clock.instant();
 		Instant leaseExpiresAt = now.plus(properties.publisher().claimLease());
+		refreshPendingGauges(now);
 
 		for (OutboxPublication publication : repository.claimPending(
 				properties.publisher().batchMax(), workerId, now, leaseExpiresAt)) {
@@ -61,7 +75,13 @@ class OutboxPublisher {
 				continue;
 			}
 
+			Timer.Sample publicationSample = Timer.start();
 			try {
+				CorrelationContext.put(CorrelationContext.CORRELATION_ID, publication.correlationId());
+				CorrelationContext.put(CorrelationContext.PAYMENT_ID, publication.paymentId());
+				CorrelationContext.put(CorrelationContext.OPERATION_ID, publication.operationId());
+				CorrelationContext.put(CorrelationContext.MESSAGE_ID, publication.messageId());
+
 				kafkaTemplate.send(
 						OutboxMessagingConfiguration.TOPIC,
 						publication.paymentId().toString(),
@@ -86,7 +106,17 @@ class OutboxPublisher {
 						rootCause(exception).getClass().getSimpleName());
 				release(publication);
 			}
+			finally {
+				publicationSample.stop(publicationDurationTimer);
+				CorrelationContext.clear();
+			}
 		}
+	}
+
+	private void refreshPendingGauges(Instant now) {
+		OutboxPublicationRepository.PendingStats stats = repository.pendingStats(now);
+		pendingCount.set(stats.pendingCount());
+		oldestPendingAgeSeconds.set(stats.oldestPendingAgeSeconds());
 	}
 
 	private void release(OutboxPublication publication) {

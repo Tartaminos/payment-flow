@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -17,6 +20,7 @@ class PaymentOperationAttemptExecutor {
 
 	private static final Logger logger = LoggerFactory.getLogger(PaymentOperationAttemptExecutor.class);
 	private static final int MAX_ATTEMPTS = 3;
+	private static final String OPERATION_TYPE = "AUTHORIZE";
 
 	private final PaymentOperationProcessingRepository repository;
 	private final List<PspAuthorizationClient> attemptClients;
@@ -24,6 +28,7 @@ class PaymentOperationAttemptExecutor {
 	private final ProcessorIdentity identity;
 	private final ProcessorProperties properties;
 	private final Clock clock;
+	private final MeterRegistry meterRegistry;
 
 	PaymentOperationAttemptExecutor(
 			PaymentOperationProcessingRepository repository,
@@ -31,7 +36,8 @@ class PaymentOperationAttemptExecutor {
 			PspLookupClient lookupClient,
 			ProcessorIdentity identity,
 			ProcessorProperties properties,
-			Clock clock) {
+			Clock clock,
+			MeterRegistry meterRegistry) {
 		if (pspAuthorizationAttemptClients.size() != MAX_ATTEMPTS) {
 			throw new IllegalArgumentException("Exactly 3 PSP authorization attempt clients are required");
 		}
@@ -41,6 +47,7 @@ class PaymentOperationAttemptExecutor {
 		this.identity = identity;
 		this.properties = properties;
 		this.clock = clock;
+		this.meterRegistry = meterRegistry;
 	}
 
 	boolean execute(PaymentOperationContext context, UUID correlationId, UUID causationId) {
@@ -82,7 +89,21 @@ class PaymentOperationAttemptExecutor {
 			}
 
 			int attemptNumber = reserved.get();
-			PspAuthorizationOutcome outcome = attemptClients.get(attemptNumber - 1).authorize(context);
+			Timer.Sample sample = Timer.start();
+			PspAuthorizationOutcome outcome;
+			try {
+				outcome = attemptClients.get(attemptNumber - 1).authorize(context);
+			}
+			finally {
+				sample.stop(Timer.builder("paymentflow.psp.call.duration")
+						.tag("operation_type", OPERATION_TYPE)
+						.register(meterRegistry));
+			}
+			Counter.builder("paymentflow.psp.outcomes")
+					.tag("operation_type", OPERATION_TYPE)
+					.tag("outcome_type", outcome.type().name())
+					.register(meterRegistry)
+					.increment();
 			if (outcome.isDefinitive()) {
 				return repository.commitOutcome(
 						context.operationId(), self, outcome, correlationId, causationId, clock.instant());

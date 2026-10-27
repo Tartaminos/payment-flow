@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,6 +16,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
 import jhsoftware.paymentsflow.outbox.OutboxMessagingConfiguration;
 
 @Component
@@ -21,21 +24,25 @@ import jhsoftware.paymentsflow.outbox.OutboxMessagingConfiguration;
 class PaymentOperationCommandListener {
 
 	static final String LISTENER_ID = "payment-operation-command-listener";
+	private static final String COMMANDS_CONSUMED_METRIC = "paymentflow.commands.consumed";
 
 	private final PaymentOperationTechnicalRetryHandoff retryHandoff;
 	private final PaymentWorkAdmission admission;
 	private final PaymentOperationWorkerPool workerPool;
 	private final BlockedPartitionDiagnostics blockedPartitionDiagnostics;
+	private final MeterRegistry meterRegistry;
 
 	PaymentOperationCommandListener(
 			PaymentOperationTechnicalRetryHandoff retryHandoff,
 			PaymentWorkAdmission admission,
 			PaymentOperationWorkerPool workerPool,
-			BlockedPartitionDiagnostics blockedPartitionDiagnostics) {
+			BlockedPartitionDiagnostics blockedPartitionDiagnostics,
+			MeterRegistry meterRegistry) {
 		this.retryHandoff = retryHandoff;
 		this.admission = admission;
 		this.workerPool = workerPool;
 		this.blockedPartitionDiagnostics = blockedPartitionDiagnostics;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@KafkaListener(
@@ -51,6 +58,7 @@ class PaymentOperationCommandListener {
 		QueuedCommand command = new QueuedCommand(record, acknowledgment, partition, paymentId, epoch);
 
 		PaymentWorkAdmission.AdmissionResult result = admission.tryAdmit(paymentId, partition, command);
+		Counter.builder(COMMANDS_CONSUMED_METRIC).tag("outcome", result.name()).register(meterRegistry).increment();
 		switch (result) {
 			case ADMIT -> dispatch(command);
 			case QUEUED -> { }
@@ -64,6 +72,7 @@ class PaymentOperationCommandListener {
 
 	private void runAndRelease(QueuedCommand command) {
 		try {
+			CorrelationContext.put(CorrelationContext.PAYMENT_ID, command.paymentId());
 			boolean ackEligible = retryHandoff.handle(command.record());
 			if (ackEligible) {
 				blockedPartitionDiagnostics.recordEligible(command.partition());
@@ -78,6 +87,7 @@ class PaymentOperationCommandListener {
 		finally {
 			admission.release(command.paymentId(), command.partition()).ifPresent(this::dispatch);
 			resumeReadyPartitions();
+			CorrelationContext.clear();
 		}
 	}
 

@@ -120,6 +120,42 @@ class ScheduledRetryRepositoryTests {
 	}
 
 	@Test
+	void backlogStatsAnchorsOldestPendingAgeOnCreationTimeNotNextEligibleTime() {
+		Instant now = Instant.parse("2026-10-27T12:00:00Z");
+		insertScheduledRetry("topic-a", 0, now.minusSeconds(10_000), now.plusSeconds(5_000));
+		insertScheduledRetry("topic-b", 0, now.minusSeconds(100), now.minusSeconds(50));
+
+		ScheduledRetryRepository.BacklogStats stats = repository.backlogStats(now);
+
+		assertThat(stats.backlogCount()).isEqualTo(2L);
+		assertThat(stats.oldestPendingAgeSeconds()).isEqualTo(10_000L);
+	}
+
+	private void insertScheduledRetry(String sourceTopic, int sourcePartition, Instant createdAt, Instant nextEligibleAt) {
+		jdbcClient.sql("""
+				INSERT INTO scheduled_retries
+				    (retry_id, source_topic, source_partition, source_offset,
+				     source_record_key, source_record_value, source_schema_id,
+				     failure_class, failed_at, retry_number, scheduled_at, next_eligible_at, state,
+				     claim_generation, created_at, updated_at)
+				VALUES
+				    (:retryId, :sourceTopic, :sourcePartition, 0,
+				     :sourceRecordKey, :sourceRecordValue, 1,
+				     :failureClass, :createdAt, 1, :createdAt, :nextEligibleAt, 'PENDING',
+				     0, :createdAt, :createdAt)
+				""")
+				.param("retryId", UUID.randomUUID())
+				.param("sourceTopic", sourceTopic)
+				.param("sourcePartition", sourcePartition)
+				.param("sourceRecordKey", new byte[] {1})
+				.param("sourceRecordValue", new byte[] {2})
+				.param("failureClass", TechnicalFailureClassifier.DATA_ACCESS_UNAVAILABLE)
+				.param("createdAt", createdAt.atOffset(ZoneOffset.UTC))
+				.param("nextEligibleAt", nextEligibleAt.atOffset(ZoneOffset.UTC))
+				.update();
+	}
+
+	@Test
 	void conflictingImmutableEvidenceIsRejected() {
 		UUID messageId = seedOriginalPublication();
 		PaymentOperationRetryEnvelope first = envelope(6L, messageId);

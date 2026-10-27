@@ -14,6 +14,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -26,6 +27,8 @@ class PaymentOperationProcessorTests {
 	private static final UUID PAYMENT_ID = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
 	private static final UUID CORRELATION_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
 	private static final Instant NOW = Instant.parse("2026-10-25T10:00:00Z");
+
+	private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
 	@Test
 	void mismatchedKeyWithholdsAcknowledgmentAndNeverRunsAttempts() {
@@ -61,6 +64,9 @@ class PaymentOperationProcessorTests {
 
 		assertThat(ackEligible).isTrue();
 		verify(executor, never()).execute(any(), any(), any());
+		assertThat(meterRegistry.get("paymentflow.duplicate.replay")
+				.tag("source", "KAFKA_REDELIVERY")
+				.counter().count()).isEqualTo(1.0);
 	}
 
 	@Test
@@ -221,7 +227,7 @@ class PaymentOperationProcessorTests {
 			ReconciliationScannerHealth scannerHealth) {
 		return new PaymentOperationProcessor(
 				new PaymentOperationCommandDecoder(), repository, executor, captureExecutor, voidExecutor, scannerHealth,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC), meterRegistry);
 	}
 
 	private PaymentOperationContext context(String operationStatus) {

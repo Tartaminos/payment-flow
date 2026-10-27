@@ -99,6 +99,25 @@ class OutboxPublicationRepository {
 				.update() == 1;
 	}
 
+	PendingStats pendingStats(Instant now) {
+		return jdbcClient.sql("""
+				SELECT COUNT(*) AS pending_count,
+				       COALESCE(MIN(created_at), :now) AS oldest_pending_at
+				FROM outbox_events
+				WHERE status IN ('PENDING', 'PUBLISHING')
+				""")
+				.param("now", now.atOffset(ZoneOffset.UTC))
+				.query((resultSet, rowNumber) -> new PendingStats(
+						resultSet.getLong("pending_count"),
+						java.time.Duration.between(
+								resultSet.getObject("oldest_pending_at", OffsetDateTime.class).toInstant(), now)
+								.getSeconds()))
+				.single();
+	}
+
+	record PendingStats(long pendingCount, long oldestPendingAgeSeconds) {
+	}
+
 	boolean releaseForRetry(UUID messageId, UUID workerId, Instant nextEligibleAt) {
 		return jdbcClient.sql("""
 				UPDATE outbox_events

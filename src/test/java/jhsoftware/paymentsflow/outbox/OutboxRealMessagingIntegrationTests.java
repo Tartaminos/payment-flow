@@ -23,6 +23,7 @@ import java.util.stream.IntStream;
 import com.jayway.jsonpath.JsonPath;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -99,6 +100,9 @@ class OutboxRealMessagingIntegrationTests {
 	@Autowired
 	KafkaTemplate<String, Object> kafkaTemplate;
 
+	@Autowired
+	MeterRegistry meterRegistry;
+
 	@BeforeEach
 	void cleanDatabase() {
 		jdbcTemplate.update("DELETE FROM outbox_events");
@@ -166,7 +170,8 @@ class OutboxRealMessagingIntegrationTests {
 						executePaymentOperationSchema,
 						schemaRegistryContract,
 						messagingProperties,
-						clock))
+						clock,
+						meterRegistry))
 				.collect(Collectors.toList());
 
 		try (KafkaConsumer<byte[], Object> consumer = consumer()) {

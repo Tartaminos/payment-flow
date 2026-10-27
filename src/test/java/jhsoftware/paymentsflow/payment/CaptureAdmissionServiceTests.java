@@ -15,6 +15,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class CaptureAdmissionServiceTests {
@@ -29,7 +30,8 @@ class CaptureAdmissionServiceTests {
 	private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
 	private final CaptureAdmissionService service =
-			new CaptureAdmissionService(repository, properties, requestHasher, validityClient, clock);
+			new CaptureAdmissionService(
+					repository, properties, requestHasher, validityClient, clock, new SimpleMeterRegistry());
 
 	@Test
 	void malformedPaymentIdIsRejected() {

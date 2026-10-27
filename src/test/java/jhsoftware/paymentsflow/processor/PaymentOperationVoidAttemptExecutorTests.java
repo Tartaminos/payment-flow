@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class PaymentOperationVoidAttemptExecutorTests {
@@ -159,7 +160,8 @@ class PaymentOperationVoidAttemptExecutorTests {
 				lookupClient,
 				new ProcessorIdentity(),
 				properties,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC),
+				new SimpleMeterRegistry());
 	}
 
 	private PaymentOperationContext context() {

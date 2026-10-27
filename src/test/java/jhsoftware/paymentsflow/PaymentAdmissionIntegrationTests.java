@@ -21,6 +21,7 @@ import java.util.concurrent.Future;
 import java.util.stream.Stream;
 
 import com.jayway.jsonpath.JsonPath;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,9 @@ class PaymentAdmissionIntegrationTests {
 
 	@Autowired
 	JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	MeterRegistry meterRegistry;
 
 	@BeforeEach
 	void cleanDatabase() {
@@ -375,6 +379,26 @@ class PaymentAdmissionIntegrationTests {
 		}
 
 		assertTableCounts(0);
+	}
+
+	@Test
+	void admittedAndDuplicatePaymentsIncrementTheAdmissionsCounterWithTheExpectedOutcome() throws Exception {
+		double admittedBefore = admissionsCount("ADMITTED");
+		double duplicateBefore = admissionsCount("DUPLICATE");
+
+		performPayment("checkout-metrics-1", VALID_BODY).andExpect(status().isAccepted());
+		performPayment("checkout-metrics-1", VALID_BODY).andExpect(status().isAccepted());
+
+		assertThat(admissionsCount("ADMITTED")).isEqualTo(admittedBefore + 1.0);
+		assertThat(admissionsCount("DUPLICATE")).isEqualTo(duplicateBefore + 1.0);
+	}
+
+	private double admissionsCount(String outcome) {
+		io.micrometer.core.instrument.Counter counter = meterRegistry.find("paymentflow.api.admissions")
+				.tag("operation_type", "CREATE")
+				.tag("outcome", outcome)
+				.counter();
+		return counter == null ? 0.0 : counter.count();
 	}
 
 	private org.springframework.test.web.servlet.ResultActions performPayment(String key, String body) throws Exception {

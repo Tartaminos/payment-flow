@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class PaymentOperationAttemptExecutorTests {
@@ -32,6 +33,7 @@ class PaymentOperationAttemptExecutorTests {
 	private final PspAuthorizationClient attemptClient2 = mock(PspAuthorizationClient.class);
 	private final PspAuthorizationClient attemptClient3 = mock(PspAuthorizationClient.class);
 	private final PspLookupClient lookupClient = mock(PspLookupClient.class);
+	private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
 	@Test
 	void takeoverWithDefinitiveLookupCommitsWithoutAnyAttemptPost() {
@@ -119,6 +121,14 @@ class PaymentOperationAttemptExecutorTests {
 		verify(attemptClient2, never()).authorize(any());
 		verify(attemptClient3, never()).authorize(any());
 		verify(repository, times(1)).reserveAttempt(any(), any(), any(), any());
+
+		assertThat(meterRegistry.get("paymentflow.psp.outcomes")
+				.tag("operation_type", "AUTHORIZE")
+				.tag("outcome_type", "REJECTED")
+				.counter().count()).isEqualTo(1.0);
+		assertThat(meterRegistry.get("paymentflow.psp.call.duration")
+				.tag("operation_type", "AUTHORIZE")
+				.timer().count()).isEqualTo(1L);
 	}
 
 	@Test
@@ -154,7 +164,8 @@ class PaymentOperationAttemptExecutorTests {
 				lookupClient,
 				new ProcessorIdentity(),
 				properties,
-				Clock.fixed(NOW, ZoneOffset.UTC));
+				Clock.fixed(NOW, ZoneOffset.UTC),
+				meterRegistry);
 	}
 
 	private PaymentOperationContext context() {

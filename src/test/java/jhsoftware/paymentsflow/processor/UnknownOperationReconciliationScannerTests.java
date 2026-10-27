@@ -16,6 +16,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -154,12 +155,21 @@ class UnknownOperationReconciliationScannerTests {
 		when(repository.bumpBackoff(eq(jobId), any(), any(), any(), any())).thenReturn(true);
 		when(escalationRepository.ensureEscalation(operationId, jobId, "PSP_UNKNOWN_24H", NOW)).thenReturn(true);
 
-		scanner().scan();
+		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+		scanner(meterRegistry).scan();
 
 		verify(escalationRepository).ensureEscalation(operationId, jobId, "PSP_UNKNOWN_24H", NOW);
+		assertThat(meterRegistry.get("paymentflow.reconciliation.due").counter().count()).isEqualTo(1.0);
+		assertThat(meterRegistry.get("paymentflow.reconciliation.escalated")
+				.tag("reason", "PSP_UNKNOWN_24H")
+				.counter().count()).isEqualTo(1.0);
 	}
 
 	private UnknownOperationReconciliationScanner scanner() {
+		return scanner(new SimpleMeterRegistry());
+	}
+
+	private UnknownOperationReconciliationScanner scanner(SimpleMeterRegistry meterRegistry) {
 		ProcessorProperties properties = new ProcessorProperties(
 				URI.create("http://localhost:8081"),
 				Duration.ofSeconds(1),
@@ -174,6 +184,6 @@ class UnknownOperationReconciliationScannerTests {
 				new ProcessorProperties.Dispatcher(Duration.ofSeconds(2), 20, Duration.ofSeconds(60)));
 		return new UnknownOperationReconciliationScanner(
 				repository, escalationRepository, lookupClient, new ProcessorIdentity(), properties,
-				Clock.fixed(NOW, ZoneOffset.UTC), health);
+				Clock.fixed(NOW, ZoneOffset.UTC), health, meterRegistry);
 	}
 }

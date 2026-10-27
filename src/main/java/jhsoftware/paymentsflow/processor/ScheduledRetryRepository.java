@@ -34,6 +34,25 @@ class ScheduledRetryRepository {
 		this.backoffPolicy = backoffPolicy;
 	}
 
+	BacklogStats backlogStats(Instant now) {
+		return jdbcClient.sql("""
+				SELECT COUNT(*) AS backlog_count,
+				       COALESCE(MIN(created_at), :now) AS oldest_pending_at
+				FROM scheduled_retries
+				WHERE state IN ('PENDING', 'CLAIMED', 'DISPATCHED')
+				""")
+				.param("now", now.atOffset(ZoneOffset.UTC))
+				.query((resultSet, rowNumber) -> new BacklogStats(
+						resultSet.getLong("backlog_count"),
+						Duration.between(
+								resultSet.getObject("oldest_pending_at", OffsetDateTime.class).toInstant(), now)
+								.getSeconds()))
+				.single();
+	}
+
+	record BacklogStats(long backlogCount, long oldestPendingAgeSeconds) {
+	}
+
 	@Transactional
 	List<DueScheduledRetry> claimDue(int batchMax, UUID workerId, Instant now, Instant leaseExpiresAt) {
 		List<UUID> claimedIds = jdbcClient.sql("""

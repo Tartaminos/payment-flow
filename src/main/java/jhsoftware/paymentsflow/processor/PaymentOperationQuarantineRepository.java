@@ -8,6 +8,8 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -18,9 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 class PaymentOperationQuarantineRepository {
 
 	private final JdbcClient jdbcClient;
+	private final MeterRegistry meterRegistry;
 
-	PaymentOperationQuarantineRepository(JdbcClient jdbcClient) {
+	PaymentOperationQuarantineRepository(JdbcClient jdbcClient, MeterRegistry meterRegistry) {
 		this.jdbcClient = jdbcClient;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@Transactional
@@ -63,6 +67,11 @@ class PaymentOperationQuarantineRepository {
 		if (stored.isEmpty() || !stored.get().matches(envelope)) {
 			throw new IllegalStateException("Conflicting immutable quarantine identity");
 		}
+
+		Counter.builder("paymentflow.dlq.entries")
+				.tag("failure_code", envelope.failureCode())
+				.register(meterRegistry)
+				.increment();
 	}
 
 	private StoredQuarantine stored(ResultSet resultSet) throws SQLException {

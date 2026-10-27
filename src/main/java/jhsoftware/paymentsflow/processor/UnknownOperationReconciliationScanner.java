@@ -13,11 +13,15 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import jakarta.annotation.PreDestroy;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import jhsoftware.paymentsflow.observability.CorrelationContext;
 
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
@@ -39,6 +43,7 @@ class UnknownOperationReconciliationScanner {
 	private final Clock clock;
 	private final ReconciliationScannerHealth health;
 	private final ExecutorService lookupExecutor;
+	private final MeterRegistry meterRegistry;
 
 	UnknownOperationReconciliationScanner(
 			ReconciliationJobRepository repository,
@@ -47,7 +52,8 @@ class UnknownOperationReconciliationScanner {
 			ProcessorIdentity identity,
 			ProcessorProperties properties,
 			Clock clock,
-			ReconciliationScannerHealth health) {
+			ReconciliationScannerHealth health,
+			MeterRegistry meterRegistry) {
 		this.repository = repository;
 		this.escalationRepository = escalationRepository;
 		this.lookupClient = lookupClient;
@@ -56,6 +62,7 @@ class UnknownOperationReconciliationScanner {
 		this.clock = clock;
 		this.health = health;
 		this.lookupExecutor = Executors.newFixedThreadPool(MAX_CONCURRENT_LOOKUPS);
+		this.meterRegistry = meterRegistry;
 	}
 
 	@Scheduled(fixedDelay = 5000, initialDelay = 5000)
@@ -68,7 +75,14 @@ class UnknownOperationReconciliationScanner {
 				repository.claimDueJobs(self, now, reconciliation.batchSize(), reconciliation.claimLease());
 
 		for (ReconciliationJobRepository.ReconciliationJobClaim claim : claims) {
-			escalateIfPastThreshold(claim, now);
+			Counter.builder("paymentflow.reconciliation.due").register(meterRegistry).increment();
+			try {
+				CorrelationContext.put(CorrelationContext.OPERATION_ID, claim.operationId());
+				escalateIfPastThreshold(claim, now);
+			}
+			finally {
+				CorrelationContext.clear();
+			}
 		}
 
 		List<Future<?>> futures = new ArrayList<>(claims.size());
@@ -88,6 +102,10 @@ class UnknownOperationReconciliationScanner {
 		}
 		boolean created = escalationRepository.ensureEscalation(claim.operationId(), claim.jobId(), UNKNOWN_24H_REASON, now);
 		if (created) {
+			Counter.builder("paymentflow.reconciliation.escalated")
+					.tag("reason", UNKNOWN_24H_REASON)
+					.register(meterRegistry)
+					.increment();
 			logger.warn("Operation {} escalated after remaining UNKNOWN for 24 hours", claim.operationId());
 		}
 	}
@@ -105,6 +123,16 @@ class UnknownOperationReconciliationScanner {
 	}
 
 	private void resolveOrBackOff(ReconciliationJobRepository.ReconciliationJobClaim claim, UUID self) {
+		try {
+			CorrelationContext.put(CorrelationContext.OPERATION_ID, claim.operationId());
+			resolveOrBackOffInternal(claim, self);
+		}
+		finally {
+			CorrelationContext.clear();
+		}
+	}
+
+	private void resolveOrBackOffInternal(ReconciliationJobRepository.ReconciliationJobClaim claim, UUID self) {
 		PspAuthorizationOutcome outcome = lookupClient.lookup(claim.operationId());
 		Instant now = clock.instant();
 

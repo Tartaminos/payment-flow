@@ -6,6 +6,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
+
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PaymentOperationRetrySchedulerListener {
@@ -26,8 +28,13 @@ class PaymentOperationRetrySchedulerListener {
 			concurrency = "1",
 			containerFactory = PaymentOperationRetrySchedulerConfiguration.LISTENER_CONTAINER_FACTORY)
 	void onRetry(ConsumerRecord<byte[], Object> record, Acknowledgment acknowledgment) {
-		if (scheduler.schedule(record)) {
-			acknowledgment.acknowledge();
+		try {
+			if (scheduler.schedule(record)) {
+				acknowledgment.acknowledge();
+			}
+		}
+		finally {
+			CorrelationContext.clear();
 		}
 	}
 }

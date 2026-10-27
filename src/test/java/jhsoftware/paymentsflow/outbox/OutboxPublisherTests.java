@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -43,6 +44,8 @@ class OutboxPublisherTests {
 	private static final UUID CORRELATION_ID = UUID.fromString("33333333-3333-4333-8333-333333333333");
 	private static final Instant OCCURRED_AT = Instant.parse("2026-10-24T18:30:45.123Z");
 	private static final Instant PUBLISHED_AT = Instant.parse("2026-10-25T10:00:00Z");
+
+	private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
 	@Test
 	void acknowledgedSendUsesPersistedCanonicalKeyAndEnvelopeThenMarksPublished() throws Exception {
@@ -77,6 +80,10 @@ class OutboxPublisherTests {
 		assertThat(record.get("causationId")).isNull();
 		verify(repository).markPublished(eq(MESSAGE_ID), any(), eq(PUBLISHED_AT));
 		verify(repository, never()).releaseForRetry(any(), any(), any());
+
+		assertThat(meterRegistry.get("paymentflow.outbox.pending").gauge().value()).isEqualTo(3.0);
+		assertThat(meterRegistry.get("paymentflow.outbox.oldest.pending.seconds").gauge().value()).isEqualTo(42.0);
+		assertThat(meterRegistry.get("paymentflow.publication.duration").timer().count()).isEqualTo(1L);
 	}
 
 	@Test
@@ -198,6 +205,7 @@ class OutboxPublisherTests {
 			KafkaTemplate<String, Object> kafkaTemplate,
 			Schema schema,
 			Clock clock) {
+		when(repository.pendingStats(any())).thenReturn(new OutboxPublicationRepository.PendingStats(3, 42));
 		return new OutboxPublisher(
 				repository,
 				kafkaTemplate,
@@ -211,7 +219,8 @@ class OutboxPublisherTests {
 								Duration.ofSeconds(60),
 								Duration.ofSeconds(5),
 								Duration.ofSeconds(60))),
-				clock);
+				clock,
+				meterRegistry);
 	}
 
 	private OutboxPublication publication(UUID authoritativePaymentId, int attemptCount) {

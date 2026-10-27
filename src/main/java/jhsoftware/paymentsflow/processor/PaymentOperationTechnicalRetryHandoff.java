@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import jhsoftware.paymentsflow.observability.CorrelationContext;
+
 @Component
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PaymentOperationTechnicalRetryHandoff {
@@ -83,6 +85,12 @@ class PaymentOperationTechnicalRetryHandoff {
 			RuntimeException failure) {
 		UUID retryId = PaymentOperationRetryIdentity.retryId(record.topic(), record.partition(), record.offset());
 		PaymentOperationCommand command = bestEffortCommand(record.topic(), rawValue, decoded);
+
+		CorrelationContext.put(CorrelationContext.RETRY_ID, retryId);
+		if (command != null) {
+			CorrelationContext.put(CorrelationContext.CORRELATION_ID, command.correlationId());
+			CorrelationContext.put(CorrelationContext.OPERATION_ID, command.operationId());
+		}
 
 		PaymentOperationRetryEnvelope envelope = new PaymentOperationRetryEnvelope(
 				retryId,

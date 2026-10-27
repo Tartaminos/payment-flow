@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,28 @@ class PaymentOperationCommandListenerTests {
 		listener(retryHandoff, admission, workerPool).onPaymentOperationCommand(record, acknowledgment);
 
 		verify(acknowledgment).acknowledge();
+	}
+
+	@Test
+	void admittedCommandIncrementsTheCommandsConsumedCounterWithAdmitOutcome() {
+		PaymentOperationTechnicalRetryHandoff retryHandoff = mock(PaymentOperationTechnicalRetryHandoff.class);
+		ConsumerRecord<byte[], Object> record = consumerRecord(UUID.randomUUID().toString());
+		when(retryHandoff.handle(record)).thenReturn(true);
+
+		PaymentWorkAdmission admission = mock(PaymentWorkAdmission.class);
+		TopicPartition partition = new TopicPartition(record.topic(), record.partition());
+		when(admission.currentEpoch(partition)).thenReturn(0L);
+		when(admission.tryAdmit(any(), eq(partition), any())).thenReturn(PaymentWorkAdmission.AdmissionResult.ADMIT);
+		when(admission.partitionsNeedingResume()).thenReturn(Set.of());
+		when(admission.release(any(), eq(partition))).thenReturn(Optional.empty());
+
+		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+		new PaymentOperationCommandListener(
+				retryHandoff, admission, synchronousWorkerPool(), mock(BlockedPartitionDiagnostics.class), meterRegistry)
+				.onPaymentOperationCommand(record, mock(Acknowledgment.class));
+
+		assertThat(meterRegistry.get("paymentflow.commands.consumed").tag("outcome", "ADMIT").counter().count())
+				.isEqualTo(1.0);
 	}
 
 	@Test
@@ -286,7 +309,7 @@ class PaymentOperationCommandListenerTests {
 		BlockedPartitionDiagnostics diagnostics = mock(BlockedPartitionDiagnostics.class);
 		PaymentOperationWorkerPool workerPool = synchronousWorkerPool();
 
-		new PaymentOperationCommandListener(retryHandoff, admission, workerPool, diagnostics)
+		new PaymentOperationCommandListener(retryHandoff, admission, workerPool, diagnostics, new SimpleMeterRegistry())
 				.onPaymentOperationCommand(record, mock(Acknowledgment.class));
 
 		verify(diagnostics).recordIneligible(eq(partition), any());
@@ -310,7 +333,8 @@ class PaymentOperationCommandListenerTests {
 
 	private PaymentOperationCommandListener listener(
 			PaymentOperationTechnicalRetryHandoff retryHandoff, PaymentWorkAdmission admission, PaymentOperationWorkerPool workerPool) {
-		return new PaymentOperationCommandListener(retryHandoff, admission, workerPool, mock(BlockedPartitionDiagnostics.class));
+		return new PaymentOperationCommandListener(
+				retryHandoff, admission, workerPool, mock(BlockedPartitionDiagnostics.class), new SimpleMeterRegistry());
 	}
 
 	private PaymentOperationWorkerPool synchronousWorkerPool() {
