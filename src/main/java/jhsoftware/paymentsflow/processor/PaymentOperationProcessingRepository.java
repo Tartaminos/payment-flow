@@ -146,22 +146,23 @@ class PaymentOperationProcessingRepository {
 				.orElse(false);
 	}
 
-	DefinitiveResolution applyDefinitiveOutcome(
+	DefinitiveResolutionOutcome applyDefinitiveOutcome(
 			UUID operationId, UUID self, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
 		Optional<Locked> lockedOptional = lockOperation(operationId);
 		if (lockedOptional.isEmpty()) {
-			return DefinitiveResolution.LEASE_LOST;
+			return new DefinitiveResolutionOutcome(DefinitiveResolution.LEASE_LOST, null);
 		}
 
 		Locked locked = lockedOptional.get();
 		if (isFinalizedStatus(locked.operationStatus())) {
 			boolean contradiction = recordFinalizedEvidence(locked, outcome, correlationId, causationId, now);
-			return contradiction ? DefinitiveResolution.CONTRADICTION : DefinitiveResolution.DUPLICATE;
+			DefinitiveResolution resolution = contradiction ? DefinitiveResolution.CONTRADICTION : DefinitiveResolution.DUPLICATE;
+			return new DefinitiveResolutionOutcome(resolution, locked.paymentId());
 		}
 
 		return applyOutcome(locked, outcome, correlationId, causationId, now, self).isPresent()
-				? DefinitiveResolution.APPLIED
-				: DefinitiveResolution.LEASE_LOST;
+				? new DefinitiveResolutionOutcome(DefinitiveResolution.APPLIED, locked.paymentId())
+				: new DefinitiveResolutionOutcome(DefinitiveResolution.LEASE_LOST, null);
 	}
 
 	private boolean recordFinalizedEvidence(
@@ -287,6 +288,24 @@ class PaymentOperationProcessingRepository {
 				.update();
 
 		return true;
+	}
+
+	@Transactional
+	void recordEscalationClosedAudit(
+			UUID paymentId, UUID operationId, String reason, UUID correlationId, UUID causationId, Instant now) {
+		long sequenceNumber = nextAuditSequence(paymentId);
+		insertAuditEvent(
+				paymentId,
+				operationId,
+				"PAYMENT_OPERATION",
+				"RECONCILIATION_ESCALATION_CLOSED",
+				"OPEN",
+				"CLOSED",
+				reason,
+				correlationId,
+				causationId,
+				sequenceNumber,
+				now);
 	}
 
 	private Optional<Locked> lockOperation(UUID operationId) {
@@ -477,6 +496,9 @@ class PaymentOperationProcessingRepository {
 
 	enum DefinitiveResolution {
 		APPLIED, DUPLICATE, CONTRADICTION, LEASE_LOST
+	}
+
+	record DefinitiveResolutionOutcome(DefinitiveResolution resolution, UUID paymentId) {
 	}
 
 	private record LatestAuditEvent(String eventType, String newStatus, String reasonCode) {

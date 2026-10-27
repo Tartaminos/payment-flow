@@ -469,7 +469,7 @@ class PaymentOperationProcessingRepositoryTests {
 		UUID operationId = UUID.randomUUID();
 		seedPaymentAndOperation(paymentId, operationId, "SUCCEEDED", "AUTHORIZED");
 
-		PaymentOperationProcessingRepository.DefinitiveResolution resolution = repository.applyDefinitiveOutcome(
+		PaymentOperationProcessingRepository.DefinitiveResolutionOutcome outcome = repository.applyDefinitiveOutcome(
 				operationId,
 				UUID.randomUUID(),
 				PspAuthorizationOutcome.succeeded(operationId.toString()),
@@ -477,7 +477,8 @@ class PaymentOperationProcessingRepositoryTests {
 				null,
 				Instant.parse("2026-10-25T10:00:00Z"));
 
-		assertThat(resolution).isEqualTo(PaymentOperationProcessingRepository.DefinitiveResolution.DUPLICATE);
+		assertThat(outcome.resolution()).isEqualTo(PaymentOperationProcessingRepository.DefinitiveResolution.DUPLICATE);
+		assertThat(outcome.paymentId()).isEqualTo(paymentId);
 		assertThat(operationStatus(operationId)).isEqualTo("SUCCEEDED");
 		assertThat(auditEventTypesInOrder(paymentId)).isEmpty();
 	}
@@ -488,7 +489,7 @@ class PaymentOperationProcessingRepositoryTests {
 		UUID operationId = UUID.randomUUID();
 		seedPaymentAndOperation(paymentId, operationId, "SUCCEEDED", "AUTHORIZED");
 
-		PaymentOperationProcessingRepository.DefinitiveResolution resolution = repository.applyDefinitiveOutcome(
+		PaymentOperationProcessingRepository.DefinitiveResolutionOutcome outcome = repository.applyDefinitiveOutcome(
 				operationId,
 				UUID.randomUUID(),
 				PspAuthorizationOutcome.rejected(operationId.toString(), "CARD_DECLINED"),
@@ -496,7 +497,8 @@ class PaymentOperationProcessingRepositoryTests {
 				null,
 				Instant.parse("2026-10-25T10:00:00Z"));
 
-		assertThat(resolution).isEqualTo(PaymentOperationProcessingRepository.DefinitiveResolution.CONTRADICTION);
+		assertThat(outcome.resolution()).isEqualTo(PaymentOperationProcessingRepository.DefinitiveResolution.CONTRADICTION);
+		assertThat(outcome.paymentId()).isEqualTo(paymentId);
 		assertThat(operationStatus(operationId)).isEqualTo("SUCCEEDED");
 		assertThat(paymentStatus(paymentId)).isEqualTo("AUTHORIZED");
 		assertThat(auditEventTypesInOrder(paymentId)).containsExactly("PSP_EVIDENCE_CONTRADICTION");
@@ -513,7 +515,7 @@ class PaymentOperationProcessingRepositoryTests {
 				.param("id", captureOperationId)
 				.update();
 
-		PaymentOperationProcessingRepository.DefinitiveResolution resolution = repository.applyDefinitiveOutcome(
+		PaymentOperationProcessingRepository.DefinitiveResolutionOutcome outcome = repository.applyDefinitiveOutcome(
 				captureOperationId,
 				UUID.randomUUID(),
 				PspAuthorizationOutcome.rejected(captureOperationId.toString(), "NON_EXECUTION_CONFIRMED"),
@@ -521,7 +523,7 @@ class PaymentOperationProcessingRepositoryTests {
 				null,
 				Instant.parse("2026-10-25T10:00:00Z"));
 
-		assertThat(resolution).isEqualTo(PaymentOperationProcessingRepository.DefinitiveResolution.CONTRADICTION);
+		assertThat(outcome.resolution()).isEqualTo(PaymentOperationProcessingRepository.DefinitiveResolution.CONTRADICTION);
 		assertThat(operationStatus(captureOperationId)).isEqualTo("REJECTED");
 		assertThat(paymentStatus(paymentId)).isEqualTo("EXPIRED");
 	}

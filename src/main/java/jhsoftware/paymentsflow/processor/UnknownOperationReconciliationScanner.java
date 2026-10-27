@@ -28,8 +28,11 @@ class UnknownOperationReconciliationScanner {
 	private static final int MAX_CONCURRENT_LOOKUPS = 4;
 	private static final long SHUTDOWN_TIMEOUT_SECONDS = 30;
 	private static final String CONTRADICTION_REASON = "PSP_EVIDENCE_CONTRADICTION";
+	private static final String UNKNOWN_24H_REASON = "PSP_UNKNOWN_24H";
+	private static final Duration ESCALATION_THRESHOLD = Duration.ofHours(24);
 
 	private final ReconciliationJobRepository repository;
+	private final ReconciliationEscalationRepository escalationRepository;
 	private final PspLookupClient lookupClient;
 	private final ProcessorIdentity identity;
 	private final ProcessorProperties properties;
@@ -39,12 +42,14 @@ class UnknownOperationReconciliationScanner {
 
 	UnknownOperationReconciliationScanner(
 			ReconciliationJobRepository repository,
+			ReconciliationEscalationRepository escalationRepository,
 			PspLookupClient lookupClient,
 			ProcessorIdentity identity,
 			ProcessorProperties properties,
 			Clock clock,
 			ReconciliationScannerHealth health) {
 		this.repository = repository;
+		this.escalationRepository = escalationRepository;
 		this.lookupClient = lookupClient;
 		this.identity = identity;
 		this.properties = properties;
@@ -62,6 +67,10 @@ class UnknownOperationReconciliationScanner {
 		List<ReconciliationJobRepository.ReconciliationJobClaim> claims =
 				repository.claimDueJobs(self, now, reconciliation.batchSize(), reconciliation.claimLease());
 
+		for (ReconciliationJobRepository.ReconciliationJobClaim claim : claims) {
+			escalateIfPastThreshold(claim, now);
+		}
+
 		List<Future<?>> futures = new ArrayList<>(claims.size());
 		for (ReconciliationJobRepository.ReconciliationJobClaim claim : claims) {
 			futures.add(lookupExecutor.submit(() -> resolveOrBackOff(claim, self)));
@@ -71,6 +80,16 @@ class UnknownOperationReconciliationScanner {
 		}
 
 		health.recordHeartbeat(now);
+	}
+
+	private void escalateIfPastThreshold(ReconciliationJobRepository.ReconciliationJobClaim claim, Instant now) {
+		if (now.isBefore(claim.unknownSince().plus(ESCALATION_THRESHOLD))) {
+			return;
+		}
+		boolean created = escalationRepository.ensureEscalation(claim.operationId(), claim.jobId(), UNKNOWN_24H_REASON, now);
+		if (created) {
+			logger.warn("Operation {} escalated after remaining UNKNOWN for 24 hours", claim.operationId());
+		}
 	}
 
 	private void awaitCompletion(Future<?> future) {
@@ -98,7 +117,7 @@ class UnknownOperationReconciliationScanner {
 				case CONTRADICTION -> {
 					Instant contradictionNextCheckAt = now.plus(backoff(claim.attempts(), properties.reconciliation()));
 					boolean flagged = repository.flagContradiction(
-							claim.jobId(), self, now, contradictionNextCheckAt, CONTRADICTION_REASON);
+							claim.jobId(), self, claim.operationId(), now, contradictionNextCheckAt, CONTRADICTION_REASON);
 					if (!flagged) {
 						logger.warn("Reconciliation job {} could not be flagged because its lease was lost", claim.jobId());
 					}

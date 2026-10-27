@@ -40,6 +40,7 @@ class ReconciliationJobRepositoryTests {
 	private static HikariDataSource dataSource;
 	private JdbcClient jdbcClient;
 	private PaymentOperationProcessingRepository operationRepository;
+	private ReconciliationEscalationRepository escalationRepository;
 	private ReconciliationJobRepository repository;
 
 	@BeforeAll
@@ -62,12 +63,14 @@ class ReconciliationJobRepositoryTests {
 	void setUp() {
 		jdbcClient = JdbcClient.create(dataSource);
 		operationRepository = new PaymentOperationProcessingRepository(jdbcClient);
-		repository = new ReconciliationJobRepository(jdbcClient, operationRepository);
+		escalationRepository = new ReconciliationEscalationRepository(jdbcClient);
+		repository = new ReconciliationJobRepository(jdbcClient, operationRepository, escalationRepository);
 	}
 
 	@AfterEach
 	void cleanDatabase() {
 		jdbcClient.sql("DELETE FROM payment_audit_events").update();
+		jdbcClient.sql("DELETE FROM reconciliation_escalations").update();
 		jdbcClient.sql("DELETE FROM reconciliation_jobs").update();
 		jdbcClient.sql("DELETE FROM payment_operations").update();
 		jdbcClient.sql("DELETE FROM payments").update();
@@ -115,6 +118,67 @@ class ReconciliationJobRepositoryTests {
 	}
 
 	@Test
+	void resolveJobClosesOpenEscalationsAndAppendsExactlyOneAuditRowPerClosedReason() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
+		escalationRepository.ensureEscalation(operationId, jobId, "PSP_UNKNOWN_24H", now);
+
+		ReconciliationJobRepository.ResolutionOutcome resolution = repository.resolveJob(
+				jobId, self, operationId, PspAuthorizationOutcome.succeeded(operationId.toString()),
+				UUID.randomUUID(), null, now);
+
+		assertThat(resolution).isEqualTo(ReconciliationJobRepository.ResolutionOutcome.RESOLVED);
+		assertThat(escalationStatus(operationId, "PSP_UNKNOWN_24H")).isEqualTo("CLOSED");
+		assertThat(auditEventTypesInOrder(paymentId)).containsExactly(
+				"PAYMENT_OPERATION_SUCCEEDED", "PAYMENT_AUTHORIZED", "RECONCILIATION_ESCALATION_CLOSED");
+		assertThat(operationStatus(operationId)).isEqualTo("SUCCEEDED");
+		assertThat(paymentStatus(paymentId)).isNotIn("FAILED", "CANCELED");
+	}
+
+	@Test
+	void bumpBackoffLeavesExistingEscalationsOpenWhenTheOperationStaysUnknown() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
+		escalationRepository.ensureEscalation(operationId, jobId, "PSP_UNKNOWN_24H", now);
+
+		boolean bumped = repository.bumpBackoff(jobId, self, "PSP_LOOKUP_NOT_FOUND", now, now.plusSeconds(10));
+
+		assertThat(bumped).isTrue();
+		assertThat(escalationStatus(operationId, "PSP_UNKNOWN_24H")).isEqualTo("OPEN");
+		assertThat(operationStatus(operationId)).isEqualTo("UNKNOWN");
+	}
+
+	@Test
+	void flagContradictionCreatesItsOwnEscalationWithoutTouchingAnExistingUnknown24hRow() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
+		escalationRepository.ensureEscalation(operationId, jobId, "PSP_UNKNOWN_24H", now);
+
+		boolean flagged = repository.flagContradiction(
+				jobId, self, operationId, now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
+
+		assertThat(flagged).isTrue();
+		assertThat(escalationStatus(operationId, "PSP_UNKNOWN_24H")).isEqualTo("OPEN");
+		assertThat(escalationStatus(operationId, "PSP_EVIDENCE_CONTRADICTION")).isEqualTo("OPEN");
+		assertThat(escalationCount(operationId)).isEqualTo(2);
+	}
+
+	@Test
 	void resolveJobDetectsContradictionAgainstAnAlreadyFinalizedOperationWithoutClosingTheJob() {
 		UUID paymentId = UUID.randomUUID();
 		UUID operationId = UUID.randomUUID();
@@ -143,7 +207,8 @@ class ReconciliationJobRepositoryTests {
 		UUID jobId = insertJob(operationId, now.minusSeconds(10));
 		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
 
-		boolean flagged = repository.flagContradiction(jobId, self, now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
+		boolean flagged = repository.flagContradiction(
+				jobId, self, operationId, now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
 
 		assertThat(flagged).isTrue();
 		assertThat(jobResolvedAt(jobId)).isNull();
@@ -162,8 +227,8 @@ class ReconciliationJobRepositoryTests {
 		UUID jobId = insertJob(operationId, now.minusSeconds(10));
 		repository.claimDueJobs(UUID.randomUUID(), now, 20, Duration.ofSeconds(30));
 
-		boolean flagged =
-				repository.flagContradiction(jobId, UUID.randomUUID(), now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
+		boolean flagged = repository.flagContradiction(
+				jobId, UUID.randomUUID(), operationId, now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
 
 		assertThat(flagged).isFalse();
 	}
@@ -179,7 +244,8 @@ class ReconciliationJobRepositoryTests {
 		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
 		Instant nextCheckAt = now.plusSeconds(10);
 
-		boolean flagged = repository.flagContradiction(jobId, self, now, nextCheckAt, "PSP_EVIDENCE_CONTRADICTION");
+		boolean flagged =
+				repository.flagContradiction(jobId, self, operationId, now, nextCheckAt, "PSP_EVIDENCE_CONTRADICTION");
 		assertThat(flagged).isTrue();
 
 		List<ReconciliationJobRepository.ReconciliationJobClaim> immediateReclaim =
@@ -315,6 +381,32 @@ class ReconciliationJobRepositoryTests {
 				.param("id", paymentId)
 				.query(String.class)
 				.single();
+	}
+
+	private String escalationStatus(UUID operationId, String reason) {
+		return jdbcClient.sql("SELECT status FROM reconciliation_escalations WHERE operation_id = :operationId AND reason = :reason")
+				.param("operationId", operationId)
+				.param("reason", reason)
+				.query(String.class)
+				.single();
+	}
+
+	private long escalationCount(UUID operationId) {
+		return jdbcClient.sql("SELECT COUNT(*) FROM reconciliation_escalations WHERE operation_id = :operationId")
+				.param("operationId", operationId)
+				.query(Long.class)
+				.single();
+	}
+
+	private List<String> auditEventTypesInOrder(UUID paymentId) {
+		return jdbcClient.sql("""
+				SELECT event_type FROM payment_audit_events
+				WHERE payment_id = :paymentId
+				ORDER BY sequence_number
+				""")
+				.param("paymentId", paymentId)
+				.query(String.class)
+				.list();
 	}
 
 	private OffsetDateTime jobResolvedAt(UUID jobId) {

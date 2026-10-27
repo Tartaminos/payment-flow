@@ -18,10 +18,15 @@ class ReconciliationJobRepository {
 
 	private final JdbcClient jdbcClient;
 	private final PaymentOperationProcessingRepository operationRepository;
+	private final ReconciliationEscalationRepository escalationRepository;
 
-	ReconciliationJobRepository(JdbcClient jdbcClient, PaymentOperationProcessingRepository operationRepository) {
+	ReconciliationJobRepository(
+			JdbcClient jdbcClient,
+			PaymentOperationProcessingRepository operationRepository,
+			ReconciliationEscalationRepository escalationRepository) {
 		this.jdbcClient = jdbcClient;
 		this.operationRepository = operationRepository;
+		this.escalationRepository = escalationRepository;
 	}
 
 	@Transactional
@@ -40,7 +45,7 @@ class ReconciliationJobRepository {
 				    LIMIT :batchSize
 				    FOR UPDATE SKIP LOCKED
 				)
-				RETURNING id, operation_id, attempts
+				RETURNING id, operation_id, attempts, unknown_since
 				""")
 				.param("self", self)
 				.param("leaseUntil", databaseTimestamp(now.plus(claimLease)))
@@ -49,7 +54,8 @@ class ReconciliationJobRepository {
 				.query((resultSet, rowNumber) -> new ReconciliationJobClaim(
 						resultSet.getObject("id", UUID.class),
 						resultSet.getObject("operation_id", UUID.class),
-						resultSet.getInt("attempts")))
+						resultSet.getInt("attempts"),
+						resultSet.getObject("unknown_since", OffsetDateTime.class).toInstant()))
 				.list();
 	}
 
@@ -57,8 +63,9 @@ class ReconciliationJobRepository {
 	ResolutionOutcome resolveJob(
 			UUID jobId, UUID self, UUID operationId, PspAuthorizationOutcome outcome,
 			UUID correlationId, UUID causationId, Instant now) {
-		PaymentOperationProcessingRepository.DefinitiveResolution resolution =
+		PaymentOperationProcessingRepository.DefinitiveResolutionOutcome outcomeResult =
 				operationRepository.applyDefinitiveOutcome(operationId, self, outcome, correlationId, causationId, now);
+		PaymentOperationProcessingRepository.DefinitiveResolution resolution = outcomeResult.resolution();
 
 		if (resolution == PaymentOperationProcessingRepository.DefinitiveResolution.LEASE_LOST) {
 			return ResolutionOutcome.LEASE_LOST;
@@ -81,12 +88,22 @@ class ReconciliationJobRepository {
 				.param("self", self)
 				.update();
 
-		return rowsUpdated == 1 ? ResolutionOutcome.RESOLVED : ResolutionOutcome.LEASE_LOST;
+		if (rowsUpdated != 1) {
+			return ResolutionOutcome.LEASE_LOST;
+		}
+
+		List<String> closedReasons = escalationRepository.closeOpenEscalations(operationId, now);
+		for (String closedReason : closedReasons) {
+			operationRepository.recordEscalationClosedAudit(
+					outcomeResult.paymentId(), operationId, closedReason, correlationId, causationId, now);
+		}
+
+		return ResolutionOutcome.RESOLVED;
 	}
 
 	@Transactional
-	boolean flagContradiction(UUID jobId, UUID self, Instant now, Instant nextCheckAt, String reason) {
-		return jdbcClient.sql("""
+	boolean flagContradiction(UUID jobId, UUID self, UUID operationId, Instant now, Instant nextCheckAt, String reason) {
+		boolean flagged = jdbcClient.sql("""
 				UPDATE reconciliation_jobs
 				SET attempts = attempts + 1,
 				    last_error = :reason,
@@ -103,6 +120,11 @@ class ReconciliationJobRepository {
 				.param("jobId", jobId)
 				.param("self", self)
 				.update() == 1;
+
+		if (flagged) {
+			escalationRepository.ensureEscalation(operationId, jobId, reason, now);
+		}
+		return flagged;
 	}
 
 	@Transactional
@@ -130,7 +152,7 @@ class ReconciliationJobRepository {
 		return instant.atOffset(ZoneOffset.UTC);
 	}
 
-	record ReconciliationJobClaim(UUID jobId, UUID operationId, int attempts) {
+	record ReconciliationJobClaim(UUID jobId, UUID operationId, int attempts, Instant unknownSince) {
 	}
 
 	enum ResolutionOutcome {
