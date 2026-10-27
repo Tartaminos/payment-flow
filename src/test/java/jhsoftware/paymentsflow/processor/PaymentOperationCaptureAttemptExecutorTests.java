@@ -172,7 +172,8 @@ class PaymentOperationCaptureAttemptExecutorTests {
 				Duration.ofMillis(1),
 				new ProcessorProperties.Reconciliation(
 						Duration.ofSeconds(5), 20, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofSeconds(60)),
-				new ProcessorProperties.Workers(32, 8, 4, 4));
+				new ProcessorProperties.Workers(32, 8, 4, 4),
+				new ProcessorProperties.Dispatcher(Duration.ofSeconds(2), 20, Duration.ofSeconds(60)));
 		return new PaymentOperationCaptureAttemptExecutor(
 				repository,
 				List.of(attemptClient1, attemptClient2, attemptClient3),

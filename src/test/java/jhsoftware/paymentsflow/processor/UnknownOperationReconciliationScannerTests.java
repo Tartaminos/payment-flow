@@ -83,7 +83,8 @@ class UnknownOperationReconciliationScannerTests {
 				Duration.ofMillis(1),
 				new ProcessorProperties.Reconciliation(
 						Duration.ofSeconds(5), 20, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofSeconds(60)),
-				new ProcessorProperties.Workers(32, 8, 4, 4));
+				new ProcessorProperties.Workers(32, 8, 4, 4),
+				new ProcessorProperties.Dispatcher(Duration.ofSeconds(2), 20, Duration.ofSeconds(60)));
 		return new UnknownOperationReconciliationScanner(
 				repository, lookupClient, new ProcessorIdentity(), properties, Clock.fixed(NOW, ZoneOffset.UTC), health);
 	}

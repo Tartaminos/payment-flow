@@ -62,3 +62,7 @@ paymentflow:
       per-partition-capacity: 8
       per-payment-waiting-capacity: 4
       pool-size: 4
+    dispatcher:
+      poll-interval: 2s
+      batch-max: 20
+      claim-lease: 60s

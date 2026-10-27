@@ -304,7 +304,8 @@ class PaymentOperationCommandListenerTests {
 				Duration.ofMillis(1),
 				new ProcessorProperties.Reconciliation(
 						Duration.ofSeconds(5), 20, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofSeconds(60)),
-				new ProcessorProperties.Workers(globalCapacity, perPartitionCapacity, perPaymentWaitingCapacity, 4));
+				new ProcessorProperties.Workers(globalCapacity, perPartitionCapacity, perPaymentWaitingCapacity, 4),
+				new ProcessorProperties.Dispatcher(Duration.ofSeconds(2), 20, Duration.ofSeconds(60)));
 	}
 
 	private PaymentOperationCommandListener listener(

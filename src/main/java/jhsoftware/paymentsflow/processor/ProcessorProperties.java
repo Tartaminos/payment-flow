@@ -16,7 +16,8 @@ record ProcessorProperties(
 		Duration retryGapAfterFirstAttempt,
 		Duration retryGapAfterSecondAttempt,
 		Reconciliation reconciliation,
-		Workers workers) {
+		Workers workers,
+		Dispatcher dispatcher) {
 
 	ProcessorProperties {
 		if (pspBaseUrl == null) {
@@ -50,6 +51,9 @@ record ProcessorProperties(
 		}
 		if (workers == null) {
 			throw new IllegalArgumentException("paymentflow.processor.workers is required");
+		}
+		if (dispatcher == null) {
+			throw new IllegalArgumentException("paymentflow.processor.dispatcher is required");
 		}
 	}
 
@@ -88,6 +92,21 @@ record ProcessorProperties(
 			}
 			if (poolSize < 1) {
 				throw new IllegalArgumentException("paymentflow.processor.workers.pool-size must be positive");
+			}
+		}
+	}
+
+	record Dispatcher(Duration pollInterval, int batchMax, Duration claimLease) {
+
+		Dispatcher {
+			if (pollInterval == null || pollInterval.isNegative() || pollInterval.isZero()) {
+				throw new IllegalArgumentException("paymentflow.processor.dispatcher.poll-interval must be positive");
+			}
+			if (batchMax < 1) {
+				throw new IllegalArgumentException("paymentflow.processor.dispatcher.batch-max must be positive");
+			}
+			if (claimLease == null || claimLease.isNegative() || claimLease.isZero()) {
+				throw new IllegalArgumentException("paymentflow.processor.dispatcher.claim-lease must be positive");
 			}
 		}
 	}
