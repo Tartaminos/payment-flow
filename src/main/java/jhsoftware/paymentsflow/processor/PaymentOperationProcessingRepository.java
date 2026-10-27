@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @ConditionalOnProperty(name = "paymentflow.messaging.enabled", havingValue = "true")
 class PaymentOperationProcessingRepository {
+
+	private static final String AUTHORIZATION_EXPIRED_REASON = "AUTHORIZATION_EXPIRED";
+	private static final String CONTRADICTION_EVENT_TYPE = "PSP_EVIDENCE_CONTRADICTION";
 
 	private final JdbcClient jdbcClient;
 
@@ -133,6 +137,7 @@ class PaymentOperationProcessingRepository {
 
 		Locked locked = lockedOptional.get();
 		if (isFinalizedStatus(locked.operationStatus())) {
+			recordFinalizedEvidence(locked, outcome, correlationId, causationId, now);
 			return true;
 		}
 
@@ -141,19 +146,80 @@ class PaymentOperationProcessingRepository {
 				.orElse(false);
 	}
 
-	boolean applyDefinitiveOutcome(
+	DefinitiveResolution applyDefinitiveOutcome(
 			UUID operationId, UUID self, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
 		Optional<Locked> lockedOptional = lockOperation(operationId);
 		if (lockedOptional.isEmpty()) {
-			return false;
+			return DefinitiveResolution.LEASE_LOST;
 		}
 
 		Locked locked = lockedOptional.get();
 		if (isFinalizedStatus(locked.operationStatus())) {
+			boolean contradiction = recordFinalizedEvidence(locked, outcome, correlationId, causationId, now);
+			return contradiction ? DefinitiveResolution.CONTRADICTION : DefinitiveResolution.DUPLICATE;
+		}
+
+		return applyOutcome(locked, outcome, correlationId, causationId, now, self).isPresent()
+				? DefinitiveResolution.APPLIED
+				: DefinitiveResolution.LEASE_LOST;
+	}
+
+	private boolean recordFinalizedEvidence(
+			Locked locked, PspAuthorizationOutcome outcome, UUID correlationId, UUID causationId, Instant now) {
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(locked.operationType(), outcome, now);
+		if (!isContradiction(locked, outcome, mapping)) {
+			return false;
+		}
+		if (isDuplicateContradictionEvidence(locked.operationId(), mapping.newOperationStatus(), outcome.reasonCode())) {
 			return true;
 		}
 
-		return applyOutcome(locked, outcome, correlationId, causationId, now, self).isPresent();
+		long sequenceNumber = nextAuditSequence(locked.paymentId());
+		insertAuditEvent(
+				locked.paymentId(),
+				locked.operationId(),
+				"PAYMENT_OPERATION",
+				CONTRADICTION_EVENT_TYPE,
+				locked.operationStatus(),
+				mapping.newOperationStatus(),
+				outcome.reasonCode(),
+				correlationId,
+				causationId,
+				sequenceNumber,
+				now);
+		return true;
+	}
+
+	private boolean isDuplicateContradictionEvidence(UUID operationId, String newStatus, String reasonCode) {
+		return jdbcClient.sql("""
+				SELECT event_type, new_status, reason_code
+				FROM payment_audit_events
+				WHERE payment_operation_id = :operationId
+				ORDER BY sequence_number DESC
+				LIMIT 1
+				""")
+				.param("operationId", operationId)
+				.query((resultSet, rowNumber) -> new LatestAuditEvent(
+						resultSet.getString("event_type"),
+						resultSet.getString("new_status"),
+						resultSet.getString("reason_code")))
+				.optional()
+				.filter(latest -> CONTRADICTION_EVENT_TYPE.equals(latest.eventType()))
+				.filter(latest -> Objects.equals(latest.newStatus(), newStatus))
+				.filter(latest -> Objects.equals(latest.reasonCode(), reasonCode))
+				.isPresent();
+	}
+
+	private boolean isContradiction(Locked locked, PspAuthorizationOutcome outcome, OutcomeMapping mapping) {
+		if (!mapping.newOperationStatus().equals(locked.operationStatus())) {
+			return true;
+		}
+		if ("CAPTURE".equals(locked.operationType()) && "REJECTED".equals(mapping.newOperationStatus())) {
+			boolean recordedExpired = AUTHORIZATION_EXPIRED_REASON.equals(locked.pspResultCode());
+			boolean newExpired = AUTHORIZATION_EXPIRED_REASON.equals(outcome.reasonCode());
+			return recordedExpired != newExpired;
+		}
+		return false;
 	}
 
 	@Transactional
@@ -228,6 +294,7 @@ class PaymentOperationProcessingRepository {
 				SELECT po.id AS operation_id,
 				       po.type AS operation_type,
 				       po.status AS operation_status,
+				       po.psp_result_code AS psp_result_code,
 				       p.id AS payment_id,
 				       p.status AS payment_status
 				FROM payment_operations po
@@ -240,6 +307,7 @@ class PaymentOperationProcessingRepository {
 						resultSet.getObject("operation_id", UUID.class),
 						resultSet.getString("operation_type"),
 						resultSet.getString("operation_status"),
+						resultSet.getString("psp_result_code"),
 						resultSet.getObject("payment_id", UUID.class),
 						resultSet.getString("payment_status")))
 				.optional();
@@ -403,7 +471,15 @@ class PaymentOperationProcessingRepository {
 		return instant.atOffset(ZoneOffset.UTC);
 	}
 
-	private record Locked(UUID operationId, String operationType, String operationStatus, UUID paymentId, String paymentStatus) {
+	private record Locked(
+			UUID operationId, String operationType, String operationStatus, String pspResultCode, UUID paymentId, String paymentStatus) {
+	}
+
+	enum DefinitiveResolution {
+		APPLIED, DUPLICATE, CONTRADICTION, LEASE_LOST
+	}
+
+	private record LatestAuditEvent(String eventType, String newStatus, String reasonCode) {
 	}
 
 	private record LeaseRow(String status, UUID leaseOwner, OffsetDateTime leaseUntil, int attemptCount) {

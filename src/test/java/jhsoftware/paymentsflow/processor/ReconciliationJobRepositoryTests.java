@@ -104,14 +104,96 @@ class ReconciliationJobRepositoryTests {
 				repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
 		assertThat(claims).hasSize(1);
 
-		boolean resolved = repository.resolveJob(
+		ReconciliationJobRepository.ResolutionOutcome resolution = repository.resolveJob(
 				jobId, self, operationId, PspAuthorizationOutcome.succeeded(operationId.toString()),
 				UUID.randomUUID(), null, now);
 
-		assertThat(resolved).isTrue();
+		assertThat(resolution).isEqualTo(ReconciliationJobRepository.ResolutionOutcome.RESOLVED);
 		assertThat(operationStatus(operationId)).isEqualTo("SUCCEEDED");
 		assertThat(paymentStatus(paymentId)).isEqualTo("AUTHORIZED");
 		assertThat(jobResolvedAt(jobId)).isNotNull();
+	}
+
+	@Test
+	void resolveJobDetectsContradictionAgainstAnAlreadyFinalizedOperationWithoutClosingTheJob() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "SUCCEEDED", "AUTHORIZED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
+
+		ReconciliationJobRepository.ResolutionOutcome resolution = repository.resolveJob(
+				jobId, self, operationId, PspAuthorizationOutcome.rejected(operationId.toString(), "CARD_DECLINED"),
+				UUID.randomUUID(), null, now);
+
+		assertThat(resolution).isEqualTo(ReconciliationJobRepository.ResolutionOutcome.CONTRADICTION);
+		assertThat(operationStatus(operationId)).isEqualTo("SUCCEEDED");
+		assertThat(jobResolvedAt(jobId)).isNull();
+	}
+
+	@Test
+	void flagContradictionRecordsTheReasonBumpsBackoffAndLeavesTheJobUnresolvedAndVisible() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
+
+		boolean flagged = repository.flagContradiction(jobId, self, now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
+
+		assertThat(flagged).isTrue();
+		assertThat(jobResolvedAt(jobId)).isNull();
+		assertThat(jobLeaseOwner(jobId)).isNull();
+		assertThat(jobLastError(jobId)).isEqualTo("PSP_EVIDENCE_CONTRADICTION");
+		assertThat(jobAttempts(jobId)).isEqualTo(1);
+		assertThat(jobNextCheckAt(jobId)).isEqualTo(now.plusSeconds(10).atOffset(ZoneOffset.UTC));
+	}
+
+	@Test
+	void flagContradictionFailsWhenTheLeaseIsNotOwnedBySelf() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(UUID.randomUUID(), now, 20, Duration.ofSeconds(30));
+
+		boolean flagged =
+				repository.flagContradiction(jobId, UUID.randomUUID(), now, now.plusSeconds(10), "PSP_EVIDENCE_CONTRADICTION");
+
+		assertThat(flagged).isFalse();
+	}
+
+	@Test
+	void contradictedJobIsNotImmediatelyReclaimableAndBecomesDueAfterBackoff() {
+		UUID paymentId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		UUID self = UUID.randomUUID();
+		Instant now = Instant.parse("2026-10-25T10:00:00Z");
+		seedPaymentAndOperation(paymentId, operationId, "UNKNOWN", "CREATED");
+		UUID jobId = insertJob(operationId, now.minusSeconds(10));
+		repository.claimDueJobs(self, now, 20, Duration.ofSeconds(30));
+		Instant nextCheckAt = now.plusSeconds(10);
+
+		boolean flagged = repository.flagContradiction(jobId, self, now, nextCheckAt, "PSP_EVIDENCE_CONTRADICTION");
+		assertThat(flagged).isTrue();
+
+		List<ReconciliationJobRepository.ReconciliationJobClaim> immediateReclaim =
+				repository.claimDueJobs(UUID.randomUUID(), now, 20, Duration.ofSeconds(30));
+		assertThat(immediateReclaim).isEmpty();
+
+		List<ReconciliationJobRepository.ReconciliationJobClaim> tooEarlyReclaim =
+				repository.claimDueJobs(UUID.randomUUID(), nextCheckAt.minusSeconds(1), 20, Duration.ofSeconds(30));
+		assertThat(tooEarlyReclaim).isEmpty();
+
+		List<ReconciliationJobRepository.ReconciliationJobClaim> reclaimAfterBackoff =
+				repository.claimDueJobs(UUID.randomUUID(), nextCheckAt, 20, Duration.ofSeconds(30));
+		assertThat(reclaimAfterBackoff).extracting(ReconciliationJobRepository.ReconciliationJobClaim::jobId)
+				.containsExactly(jobId);
 	}
 
 	@Test
@@ -250,10 +332,25 @@ class ReconciliationJobRepositoryTests {
 				.single();
 	}
 
+	private OffsetDateTime jobNextCheckAt(UUID jobId) {
+		return jdbcClient.sql("SELECT next_check_at FROM reconciliation_jobs WHERE id = :id")
+				.param("id", jobId)
+				.query(OffsetDateTime.class)
+				.single();
+	}
+
 	private UUID operationLeaseOwner(UUID operationId) {
 		return jdbcClient.sql("SELECT lease_owner FROM payment_operations WHERE id = :id")
 				.param("id", operationId)
 				.query(UUID.class)
+				.optional()
+				.orElse(null);
+	}
+
+	private String jobLastError(UUID jobId) {
+		return jdbcClient.sql("SELECT last_error FROM reconciliation_jobs WHERE id = :id")
+				.param("id", jobId)
+				.query(String.class)
 				.optional()
 				.orElse(null);
 	}

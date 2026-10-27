@@ -3,9 +3,16 @@ package jhsoftware.paymentsflow.processor;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,6 +25,9 @@ class UnknownOperationReconciliationScanner {
 
 	private static final Logger logger = LoggerFactory.getLogger(UnknownOperationReconciliationScanner.class);
 	private static final int MAX_BACKOFF_SHIFT = 30;
+	private static final int MAX_CONCURRENT_LOOKUPS = 4;
+	private static final long SHUTDOWN_TIMEOUT_SECONDS = 30;
+	private static final String CONTRADICTION_REASON = "PSP_EVIDENCE_CONTRADICTION";
 
 	private final ReconciliationJobRepository repository;
 	private final PspLookupClient lookupClient;
@@ -25,6 +35,7 @@ class UnknownOperationReconciliationScanner {
 	private final ProcessorProperties properties;
 	private final Clock clock;
 	private final ReconciliationScannerHealth health;
+	private final ExecutorService lookupExecutor;
 
 	UnknownOperationReconciliationScanner(
 			ReconciliationJobRepository repository,
@@ -39,6 +50,7 @@ class UnknownOperationReconciliationScanner {
 		this.properties = properties;
 		this.clock = clock;
 		this.health = health;
+		this.lookupExecutor = Executors.newFixedThreadPool(MAX_CONCURRENT_LOOKUPS);
 	}
 
 	@Scheduled(fixedDelay = 5000, initialDelay = 5000)
@@ -50,11 +62,27 @@ class UnknownOperationReconciliationScanner {
 		List<ReconciliationJobRepository.ReconciliationJobClaim> claims =
 				repository.claimDueJobs(self, now, reconciliation.batchSize(), reconciliation.claimLease());
 
+		List<Future<?>> futures = new ArrayList<>(claims.size());
 		for (ReconciliationJobRepository.ReconciliationJobClaim claim : claims) {
-			resolveOrBackOff(claim, self);
+			futures.add(lookupExecutor.submit(() -> resolveOrBackOff(claim, self)));
+		}
+		for (Future<?> future : futures) {
+			awaitCompletion(future);
 		}
 
 		health.recordHeartbeat(now);
+	}
+
+	private void awaitCompletion(Future<?> future) {
+		try {
+			future.get();
+		}
+		catch (ExecutionException exception) {
+			logger.warn("Reconciliation lookup task failed", exception.getCause());
+		}
+		catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	private void resolveOrBackOff(ReconciliationJobRepository.ReconciliationJobClaim claim, UUID self) {
@@ -62,9 +90,20 @@ class UnknownOperationReconciliationScanner {
 		Instant now = clock.instant();
 
 		if (outcome.isDefinitive()) {
-			boolean resolved = repository.resolveJob(claim.jobId(), self, claim.operationId(), outcome, UUID.randomUUID(), null, now);
-			if (!resolved) {
-				logger.warn("Reconciliation job {} could not be resolved because its lease was lost", claim.jobId());
+			ReconciliationJobRepository.ResolutionOutcome resolution =
+					repository.resolveJob(claim.jobId(), self, claim.operationId(), outcome, UUID.randomUUID(), null, now);
+			switch (resolution) {
+				case LEASE_LOST ->
+						logger.warn("Reconciliation job {} could not be resolved because its lease was lost", claim.jobId());
+				case CONTRADICTION -> {
+					Instant contradictionNextCheckAt = now.plus(backoff(claim.attempts(), properties.reconciliation()));
+					boolean flagged = repository.flagContradiction(
+							claim.jobId(), self, now, contradictionNextCheckAt, CONTRADICTION_REASON);
+					if (!flagged) {
+						logger.warn("Reconciliation job {} could not be flagged because its lease was lost", claim.jobId());
+					}
+				}
+				case RESOLVED -> { }
 			}
 			return;
 		}
@@ -81,5 +120,19 @@ class UnknownOperationReconciliationScanner {
 		int shift = Math.min(attempts, MAX_BACKOFF_SHIFT);
 		Duration candidate = initial.multipliedBy(1L << shift);
 		return candidate.compareTo(reconciliation.backoffMax()) > 0 ? reconciliation.backoffMax() : candidate;
+	}
+
+	@PreDestroy
+	void shutdown() {
+		lookupExecutor.shutdown();
+		try {
+			if (!lookupExecutor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+				lookupExecutor.shutdownNow();
+			}
+		}
+		catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			lookupExecutor.shutdownNow();
+		}
 	}
 }

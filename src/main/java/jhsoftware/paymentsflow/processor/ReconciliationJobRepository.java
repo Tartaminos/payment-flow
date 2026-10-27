@@ -54,16 +54,20 @@ class ReconciliationJobRepository {
 	}
 
 	@Transactional
-	boolean resolveJob(
+	ResolutionOutcome resolveJob(
 			UUID jobId, UUID self, UUID operationId, PspAuthorizationOutcome outcome,
 			UUID correlationId, UUID causationId, Instant now) {
-		boolean applied =
+		PaymentOperationProcessingRepository.DefinitiveResolution resolution =
 				operationRepository.applyDefinitiveOutcome(operationId, self, outcome, correlationId, causationId, now);
-		if (!applied) {
-			return false;
+
+		if (resolution == PaymentOperationProcessingRepository.DefinitiveResolution.LEASE_LOST) {
+			return ResolutionOutcome.LEASE_LOST;
+		}
+		if (resolution == PaymentOperationProcessingRepository.DefinitiveResolution.CONTRADICTION) {
+			return ResolutionOutcome.CONTRADICTION;
 		}
 
-		return jdbcClient.sql("""
+		int rowsUpdated = jdbcClient.sql("""
 				UPDATE reconciliation_jobs
 				SET resolved_at = :now,
 				    lease_owner = NULL,
@@ -72,6 +76,29 @@ class ReconciliationJobRepository {
 				WHERE id = :jobId
 				  AND lease_owner = :self
 				""")
+				.param("now", databaseTimestamp(now))
+				.param("jobId", jobId)
+				.param("self", self)
+				.update();
+
+		return rowsUpdated == 1 ? ResolutionOutcome.RESOLVED : ResolutionOutcome.LEASE_LOST;
+	}
+
+	@Transactional
+	boolean flagContradiction(UUID jobId, UUID self, Instant now, Instant nextCheckAt, String reason) {
+		return jdbcClient.sql("""
+				UPDATE reconciliation_jobs
+				SET attempts = attempts + 1,
+				    last_error = :reason,
+				    next_check_at = :nextCheckAt,
+				    lease_owner = NULL,
+				    lease_until = NULL,
+				    updated_at = :now
+				WHERE id = :jobId
+				  AND lease_owner = :self
+				""")
+				.param("reason", reason)
+				.param("nextCheckAt", databaseTimestamp(nextCheckAt))
 				.param("now", databaseTimestamp(now))
 				.param("jobId", jobId)
 				.param("self", self)
@@ -104,5 +131,9 @@ class ReconciliationJobRepository {
 	}
 
 	record ReconciliationJobClaim(UUID jobId, UUID operationId, int attempts) {
+	}
+
+	enum ResolutionOutcome {
+		RESOLVED, CONTRADICTION, LEASE_LOST
 	}
 }

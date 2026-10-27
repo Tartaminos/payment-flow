@@ -56,7 +56,7 @@ paymentflow:
       batch-size: 20
       claim-lease: 30s
       backoff-initial: 5s
-      backoff-max: 60s
+      backoff-max: 300s
     workers:
       global-capacity: 32
       per-partition-capacity: 8

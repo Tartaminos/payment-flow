@@ -1,5 +1,6 @@
 package jhsoftware.paymentsflow.processor;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class UnknownOperationReconciliationScannerTests {
 
@@ -33,7 +35,8 @@ class UnknownOperationReconciliationScannerTests {
 				List.of(new ReconciliationJobRepository.ReconciliationJobClaim(jobId, operationId, 1)));
 		PspAuthorizationOutcome outcome = PspAuthorizationOutcome.succeeded(operationId.toString());
 		when(lookupClient.lookup(operationId)).thenReturn(outcome);
-		when(repository.resolveJob(eq(jobId), any(), eq(operationId), eq(outcome), any(), any(), any())).thenReturn(true);
+		when(repository.resolveJob(eq(jobId), any(), eq(operationId), eq(outcome), any(), any(), any()))
+				.thenReturn(ReconciliationJobRepository.ResolutionOutcome.RESOLVED);
 
 		scanner().scan();
 
@@ -49,12 +52,33 @@ class UnknownOperationReconciliationScannerTests {
 				List.of(new ReconciliationJobRepository.ReconciliationJobClaim(jobId, captureOperationId, 2)));
 		PspAuthorizationOutcome outcome = PspAuthorizationOutcome.succeeded(captureOperationId.toString());
 		when(lookupClient.lookup(captureOperationId)).thenReturn(outcome);
-		when(repository.resolveJob(eq(jobId), any(), eq(captureOperationId), eq(outcome), any(), any(), any())).thenReturn(true);
+		when(repository.resolveJob(eq(jobId), any(), eq(captureOperationId), eq(outcome), any(), any(), any()))
+				.thenReturn(ReconciliationJobRepository.ResolutionOutcome.RESOLVED);
 
 		scanner().scan();
 
 		verify(lookupClient).lookup(captureOperationId);
 		verify(repository).resolveJob(eq(jobId), any(), eq(captureOperationId), eq(outcome), any(), any(), any());
+	}
+
+	@Test
+	void contradictionResolutionFlagsTheJobInsteadOfLeavingItSilentlyResolved() {
+		UUID jobId = UUID.randomUUID();
+		UUID operationId = UUID.randomUUID();
+		when(repository.claimDueJobs(any(), eq(NOW), eq(20), any())).thenReturn(
+				List.of(new ReconciliationJobRepository.ReconciliationJobClaim(jobId, operationId, 1)));
+		PspAuthorizationOutcome outcome = PspAuthorizationOutcome.rejected(operationId.toString(), "CARD_DECLINED");
+		when(lookupClient.lookup(operationId)).thenReturn(outcome);
+		when(repository.resolveJob(eq(jobId), any(), eq(operationId), eq(outcome), any(), any(), any()))
+				.thenReturn(ReconciliationJobRepository.ResolutionOutcome.CONTRADICTION);
+		when(repository.flagContradiction(eq(jobId), any(), any(), any(), eq("PSP_EVIDENCE_CONTRADICTION"))).thenReturn(true);
+
+		scanner().scan();
+
+		ArgumentCaptor<Instant> nextCheckAtCaptor = ArgumentCaptor.forClass(Instant.class);
+		verify(repository).flagContradiction(
+				eq(jobId), any(), any(), nextCheckAtCaptor.capture(), eq("PSP_EVIDENCE_CONTRADICTION"));
+		assertThat(nextCheckAtCaptor.getValue()).isEqualTo(NOW.plusSeconds(10));
 	}
 
 	@Test
@@ -70,6 +94,35 @@ class UnknownOperationReconciliationScannerTests {
 
 		verify(repository).bumpBackoff(eq(jobId), any(), eq("PSP_LOOKUP_NOT_FOUND"), any(), any());
 		verify(repository, never()).resolveJob(any(), any(), any(), any(), any(), any(), any());
+	}
+
+	@Test
+	void scanNeverRunsMoreThanFourConcurrentLookups() throws Exception {
+		int jobCount = 20;
+		java.util.List<ReconciliationJobRepository.ReconciliationJobClaim> claims = new java.util.ArrayList<>();
+		for (int i = 0; i < jobCount; i++) {
+			claims.add(new ReconciliationJobRepository.ReconciliationJobClaim(UUID.randomUUID(), UUID.randomUUID(), 0));
+		}
+		when(repository.claimDueJobs(any(), eq(NOW), eq(20), any())).thenReturn(claims);
+
+		java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
+		java.util.concurrent.atomic.AtomicInteger highWaterMark = new java.util.concurrent.atomic.AtomicInteger();
+		when(lookupClient.lookup(any())).thenAnswer(invocation -> {
+			int current = inFlight.incrementAndGet();
+			highWaterMark.getAndUpdate(previous -> Math.max(previous, current));
+			try {
+				Thread.sleep(20);
+			}
+			finally {
+				inFlight.decrementAndGet();
+			}
+			return PspAuthorizationOutcome.unknown("PSP_LOOKUP_NOT_FOUND");
+		});
+		when(repository.bumpBackoff(any(), any(), any(), any(), any())).thenReturn(true);
+
+		scanner().scan();
+
+		assertThat(highWaterMark.get()).isLessThanOrEqualTo(4);
 	}
 
 	private UnknownOperationReconciliationScanner scanner() {
