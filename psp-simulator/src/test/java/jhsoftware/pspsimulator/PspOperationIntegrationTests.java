@@ -323,4 +323,119 @@ class PspOperationIntegrationTests {
 				"SELECT COUNT(*) FROM psp_operations WHERE psp_operation_id = ?", Long.class, pspOperationId);
 		assertThat(count).isEqualTo(0L);
 	}
+
+	private String voidRequest(UUID pspOperationId, UUID merchantId, UUID authorizationPspOperationId, long amountMinor) {
+		return """
+				{"pspOperationId":"%s","merchantId":"%s","paymentId":"%s","amountMinor":%d,"currency":"BRL","authorizationPspOperationId":"%s"}
+				"""
+				.formatted(pspOperationId, merchantId, UUID.randomUUID(), amountMinor, authorizationPspOperationId);
+	}
+
+	private String voidRequest(UUID pspOperationId, UUID authorizationPspOperationId, long amountMinor) {
+		return voidRequest(pspOperationId, UUID.randomUUID(), authorizationPspOperationId, amountMinor);
+	}
+
+	@Test
+	void voidedAmountBandYieldsSucceededAndIsIdempotentOnReplay() throws Exception {
+		UUID authorizationPspOperationId = authorizeApprovedAuthorization(10000L);
+		UUID pspOperationId = UUID.randomUUID();
+		String body = voidRequest(pspOperationId, authorizationPspOperationId, 10000L);
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result").value("SUCCEEDED"));
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result").value("SUCCEEDED"));
+
+		Long count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM psp_operations WHERE psp_operation_id = ?", Long.class, pspOperationId);
+		assertThat(count).isEqualTo(1L);
+	}
+
+	@Test
+	void mismatchedVoidReplayOfSameIdentityIsRejectedAsConflict() throws Exception {
+		UUID authorizationPspOperationId = authorizeApprovedAuthorization(10000L);
+		UUID pspOperationId = UUID.randomUUID();
+		UUID merchantId = UUID.randomUUID();
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, merchantId, authorizationPspOperationId, 10000L)))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, merchantId, UUID.randomUUID(), 10000L)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("PSP_OPERATION_CONFLICT"));
+	}
+
+	@Test
+	void expiredAuthorizationForcesVoidRejectionEvenUnderAnApprovedVoidFixtureBand() throws Exception {
+		UUID authorizationPspOperationId = authorizeExpiredAuthorization(1680L);
+		UUID pspOperationId = UUID.randomUUID();
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, authorizationPspOperationId, 1680L)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result").value("REJECTED"))
+				.andExpect(jsonPath("$.reasonCode").value("AUTHORIZATION_EXPIRED"));
+	}
+
+	@Test
+	void voidDeclinedFixtureBandYieldsRejectedIndependentlyOfTheAuthorizeAndCaptureBands() throws Exception {
+		UUID authorizationPspOperationId = authorizeApprovedAuthorization(310L);
+		UUID pspOperationId = UUID.randomUUID();
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, authorizationPspOperationId, 310L)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result").value("REJECTED"));
+	}
+
+	@Test
+	void voidNonExecutedFixtureBandYieldsFailedIndependentlyOfTheAuthorizeAndCaptureBands() throws Exception {
+		UUID authorizationPspOperationId = authorizeApprovedAuthorization(360L);
+		UUID pspOperationId = UUID.randomUUID();
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, authorizationPspOperationId, 360L)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.result").value("FAILED"));
+	}
+
+	@Test
+	void voidProcessingFixtureBandYieldsAccepted() throws Exception {
+		UUID authorizationPspOperationId = authorizeApprovedAuthorization(410L);
+		UUID pspOperationId = UUID.randomUUID();
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, authorizationPspOperationId, 410L)))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.result").value("PROCESSING"));
+	}
+
+	@Test
+	void voidUnprocessedFaultFixtureBandYieldsNoPersistedEffect() throws Exception {
+		UUID authorizationPspOperationId = authorizeApprovedAuthorization(490L);
+		UUID pspOperationId = UUID.randomUUID();
+
+		mockMvc.perform(post("/simulator/operations/void")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(voidRequest(pspOperationId, authorizationPspOperationId, 490L)))
+				.andExpect(status().isServiceUnavailable());
+
+		Long count = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM psp_operations WHERE psp_operation_id = ?", Long.class, pspOperationId);
+		assertThat(count).isEqualTo(0L);
+	}
 }

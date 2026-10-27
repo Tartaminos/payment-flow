@@ -54,6 +54,14 @@ class PaymentOperationConsumerConfiguration {
 	}
 
 	@Bean
+	List<PspVoidClient> pspVoidAttemptClients(ProcessorProperties properties) {
+		return properties.pspAttemptReadTimeouts().stream()
+				.map(readTimeout -> new PspVoidClient(
+						buildRestClient(properties.pspBaseUrl(), properties.pspConnectTimeout(), readTimeout)))
+				.toList();
+	}
+
+	@Bean
 	RestClient pspLookupRestClient(ProcessorProperties properties) {
 		return buildRestClient(properties.pspBaseUrl(), properties.pspConnectTimeout(), properties.pspLookupReadTimeout());
 	}

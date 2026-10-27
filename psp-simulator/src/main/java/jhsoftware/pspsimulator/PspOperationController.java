@@ -39,6 +39,15 @@ class PspOperationController {
 		return ResponseEntity.ok(result.decision());
 	}
 
+	@PostMapping("/simulator/operations/void")
+	ResponseEntity<OperationDecisionResponse> voidOperation(@Valid @RequestBody VoidOperationRequest request) {
+		VoidOperationResult result = service.voidOperation(request);
+		if (result.stillProcessing()) {
+			return ResponseEntity.status(HttpStatus.ACCEPTED).body(result.decision());
+		}
+		return ResponseEntity.ok(result.decision());
+	}
+
 	@GetMapping("/simulator/operations/{pspOperationId}")
 	ResponseEntity<OperationDecisionResponse> findByPspOperationId(@PathVariable UUID pspOperationId) {
 		return service.findDecision(pspOperationId)

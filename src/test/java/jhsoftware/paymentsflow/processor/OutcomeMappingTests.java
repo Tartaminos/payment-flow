@@ -94,4 +94,51 @@ class OutcomeMappingTests {
 		assertThat(mapping.newPaymentStatus()).isNull();
 		assertThat(mapping.ackEligible()).isFalse();
 	}
+
+	@Test
+	void voidSucceededMapsToCanceledPayment() {
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(
+				"VOID", PspAuthorizationOutcome.succeeded("ref"), NOW);
+
+		assertThat(mapping.newOperationStatus()).isEqualTo("SUCCEEDED");
+		assertThat(mapping.newPaymentStatus()).isEqualTo("CANCELED");
+		assertThat(mapping.ackEligible()).isTrue();
+	}
+
+	@Test
+	void voidRejectionLeavesPaymentStatusUnchanged() {
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(
+				"VOID", PspAuthorizationOutcome.rejected("ref", "NON_EXECUTION_CONFIRMED"), NOW);
+
+		assertThat(mapping.newOperationStatus()).isEqualTo("REJECTED");
+		assertThat(mapping.newPaymentStatus()).isNull();
+	}
+
+	@Test
+	void voidRejectionWithAuthorizationExpiredReasonNeverTransitionsPaymentToExpired() {
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(
+				"VOID", PspAuthorizationOutcome.rejected("ref", "AUTHORIZATION_EXPIRED"), NOW);
+
+		assertThat(mapping.newOperationStatus()).isEqualTo("REJECTED");
+		assertThat(mapping.newPaymentStatus()).isNull();
+	}
+
+	@Test
+	void voidFailedLeavesPaymentStatusUnchanged() {
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(
+				"VOID", PspAuthorizationOutcome.failed("ref", "NON_EXECUTION_CONFIRMED"), NOW);
+
+		assertThat(mapping.newOperationStatus()).isEqualTo("FAILED");
+		assertThat(mapping.newPaymentStatus()).isNull();
+	}
+
+	@Test
+	void voidUnknownLeavesPaymentStatusUnchangedAndWithholdsAcknowledgment() {
+		OutcomeMapping mapping = OutcomeMapping.forOutcome(
+				"VOID", PspAuthorizationOutcome.unknown("PSP_UNREACHABLE"), NOW);
+
+		assertThat(mapping.newOperationStatus()).isEqualTo("UNKNOWN");
+		assertThat(mapping.newPaymentStatus()).isNull();
+		assertThat(mapping.ackEligible()).isFalse();
+	}
 }

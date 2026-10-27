@@ -16,6 +16,9 @@ record OutcomeMapping(
 		if ("CAPTURE".equals(operationType)) {
 			return forCaptureOutcome(outcome, now);
 		}
+		if ("VOID".equals(operationType)) {
+			return forVoidOutcome(outcome, now);
+		}
 		return forAuthorizeOutcome(outcome, now);
 	}
 
@@ -38,6 +41,15 @@ record OutcomeMapping(
 					now,
 					null,
 					true);
+			case FAILED -> new OutcomeMapping("FAILED", null, outcome.reasonCode(), now, null, true);
+			case UNKNOWN -> new OutcomeMapping("UNKNOWN", null, outcome.reasonCode(), null, now, false);
+		};
+	}
+
+	private static OutcomeMapping forVoidOutcome(PspAuthorizationOutcome outcome, Instant now) {
+		return switch (outcome.type()) {
+			case SUCCEEDED -> new OutcomeMapping("SUCCEEDED", "CANCELED", null, now, null, true);
+			case REJECTED -> new OutcomeMapping("REJECTED", null, outcome.reasonCode(), now, null, true);
 			case FAILED -> new OutcomeMapping("FAILED", null, outcome.reasonCode(), now, null, true);
 			case UNKNOWN -> new OutcomeMapping("UNKNOWN", null, outcome.reasonCode(), null, now, false);
 		};

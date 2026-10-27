@@ -96,13 +96,34 @@ class PaymentOperationProcessorTests {
 		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
 		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
 		PaymentOperationCaptureAttemptExecutor captureExecutor = mock(PaymentOperationCaptureAttemptExecutor.class);
-		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(context("PENDING", "VOID")));
+		PaymentOperationVoidAttemptExecutor voidExecutor = mock(PaymentOperationVoidAttemptExecutor.class);
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(context("PENDING", "REFUND")));
 
-		boolean ackEligible = processor(repository, executor, captureExecutor).process(PAYMENT_ID.toString(), command());
+		boolean ackEligible = processor(repository, executor, captureExecutor, voidExecutor, mock(ReconciliationScannerHealth.class))
+				.process(PAYMENT_ID.toString(), command());
 
 		assertThat(ackEligible).isFalse();
 		verify(executor, never()).execute(any(), any(), any());
 		verify(captureExecutor, never()).execute(any(), any(), any());
+		verify(voidExecutor, never()).execute(any(), any(), any());
+	}
+
+	@Test
+	void pendingVoidOperationDelegatesToVoidAttemptExecutor() {
+		PaymentOperationProcessingRepository repository = mock(PaymentOperationProcessingRepository.class);
+		PaymentOperationAttemptExecutor executor = mock(PaymentOperationAttemptExecutor.class);
+		PaymentOperationVoidAttemptExecutor voidExecutor = mock(PaymentOperationVoidAttemptExecutor.class);
+		PaymentOperationContext pendingContext = context("PENDING", "VOID");
+		when(repository.loadContext(OPERATION_ID)).thenReturn(Optional.of(pendingContext));
+		when(voidExecutor.execute(pendingContext, CORRELATION_ID, null)).thenReturn(true);
+
+		boolean ackEligible = processor(
+				repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class), voidExecutor, mock(ReconciliationScannerHealth.class))
+				.process(PAYMENT_ID.toString(), command());
+
+		assertThat(ackEligible).isTrue();
+		verify(voidExecutor).execute(pendingContext, CORRELATION_ID, null);
+		verify(executor, never()).execute(any(), any(), any());
 	}
 
 	@Test
@@ -167,30 +188,37 @@ class PaymentOperationProcessorTests {
 
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository, PaymentOperationAttemptExecutor executor) {
-		return processor(repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class), mock(ReconciliationScannerHealth.class));
+		return processor(
+				repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class),
+				mock(PaymentOperationVoidAttemptExecutor.class), mock(ReconciliationScannerHealth.class));
 	}
 
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository,
 			PaymentOperationAttemptExecutor executor,
 			PaymentOperationCaptureAttemptExecutor captureExecutor) {
-		return processor(repository, executor, captureExecutor, mock(ReconciliationScannerHealth.class));
+		return processor(
+				repository, executor, captureExecutor, mock(PaymentOperationVoidAttemptExecutor.class),
+				mock(ReconciliationScannerHealth.class));
 	}
 
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository,
 			PaymentOperationAttemptExecutor executor,
 			ReconciliationScannerHealth scannerHealth) {
-		return processor(repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class), scannerHealth);
+		return processor(
+				repository, executor, mock(PaymentOperationCaptureAttemptExecutor.class),
+				mock(PaymentOperationVoidAttemptExecutor.class), scannerHealth);
 	}
 
 	private PaymentOperationProcessor processor(
 			PaymentOperationProcessingRepository repository,
 			PaymentOperationAttemptExecutor executor,
 			PaymentOperationCaptureAttemptExecutor captureExecutor,
+			PaymentOperationVoidAttemptExecutor voidExecutor,
 			ReconciliationScannerHealth scannerHealth) {
 		return new PaymentOperationProcessor(
-				new PaymentOperationCommandDecoder(), repository, executor, captureExecutor, scannerHealth,
+				new PaymentOperationCommandDecoder(), repository, executor, captureExecutor, voidExecutor, scannerHealth,
 				Clock.fixed(NOW, ZoneOffset.UTC));
 	}
 

@@ -16,16 +16,19 @@ class PspOperationService {
 	private final PspOperationRepository repository;
 	private final AmountMinorFixtureOutcomeSelector fixtureSelector;
 	private final CaptureFixtureOutcomeSelector captureFixtureSelector;
+	private final VoidFixtureOutcomeSelector voidFixtureSelector;
 	private final Clock clock;
 
 	PspOperationService(
 			PspOperationRepository repository,
 			AmountMinorFixtureOutcomeSelector fixtureSelector,
 			CaptureFixtureOutcomeSelector captureFixtureSelector,
+			VoidFixtureOutcomeSelector voidFixtureSelector,
 			Clock clock) {
 		this.repository = repository;
 		this.fixtureSelector = fixtureSelector;
 		this.captureFixtureSelector = captureFixtureSelector;
+		this.voidFixtureSelector = voidFixtureSelector;
 		this.clock = clock;
 	}
 
@@ -137,6 +140,66 @@ class PspOperationService {
 				fixtureOutcome == PspFixtureOutcome.PROCESSING);
 	}
 
+	VoidOperationResult voidOperation(VoidOperationRequest request) {
+		Optional<PspOperationRecord> existing = repository.findByMerchantAndPspOperationId(
+				request.merchantId(), request.pspOperationId());
+		if (existing.isPresent()) {
+			return toVoidResult(resolveOrConflict(existing.get(), request));
+		}
+
+		PspOperationRecord authorization = repository.findByPspOperationId(request.authorizationPspOperationId())
+				.orElse(null);
+		boolean authorizationExpired = authorization != null && "EXPIRED".equals(authorization.validity());
+
+		String decision;
+		String decisionReason;
+		PspFixtureOutcome fixtureOutcome = null;
+		if (authorizationExpired) {
+			decision = "REJECTED";
+			decisionReason = AUTHORIZATION_EXPIRED_REASON;
+		}
+		else {
+			fixtureOutcome = voidFixtureSelector.outcomeFor(request.amountMinor());
+			if (fixtureOutcome == PspFixtureOutcome.FAULT_UNPROCESSED) {
+				throw new PspUnprocessedFaultException();
+			}
+			decision = decisionFor(fixtureOutcome);
+			decisionReason = decisionReasonFor(fixtureOutcome);
+		}
+
+		Instant now = clock.instant();
+
+		try {
+			repository.insert(
+					request.merchantId(),
+					request.pspOperationId(),
+					request.paymentId(),
+					request.amountMinor(),
+					request.currency(),
+					decision,
+					decisionReason,
+					"VOID",
+					request.authorizationPspOperationId(),
+					null,
+					null,
+					now);
+		}
+		catch (DataIntegrityViolationException exception) {
+			PspOperationRecord raced = repository.findByMerchantAndPspOperationId(
+							request.merchantId(), request.pspOperationId())
+					.orElseThrow(() -> exception);
+			return toVoidResult(resolveOrConflict(raced, request));
+		}
+
+		if (fixtureOutcome == PspFixtureOutcome.FAULT_COMMITTED_REPLY_DROPPED) {
+			throw new PspReplyDroppedFaultException();
+		}
+
+		return new VoidOperationResult(
+				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, null, now),
+				fixtureOutcome == PspFixtureOutcome.PROCESSING);
+	}
+
 	Optional<OperationDecisionResponse> findDecision(UUID pspOperationId) {
 		return repository.findByPspOperationId(pspOperationId)
 				.map(operation -> new OperationDecisionResponse(
@@ -159,6 +222,24 @@ class PspOperationService {
 			throw new PspOperationConflictException();
 		}
 		return existing;
+	}
+
+	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, VoidOperationRequest request) {
+		if (!existing.matches(request)) {
+			throw new PspOperationConflictException();
+		}
+		return existing;
+	}
+
+	private VoidOperationResult toVoidResult(PspOperationRecord record) {
+		return new VoidOperationResult(
+				new OperationDecisionResponse(
+						record.pspOperationId(),
+						record.decision(),
+						record.decisionReason(),
+						record.validity(),
+						record.validityEvidenceAt()),
+				record.decision().equals("PROCESSING"));
 	}
 
 	private CaptureOperationResult toCaptureResult(PspOperationRecord record) {

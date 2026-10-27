@@ -32,4 +32,13 @@ record PspOperationRecord(
 				&& authorizationPspOperationId != null
 				&& authorizationPspOperationId.equals(request.authorizationPspOperationId());
 	}
+
+	boolean matches(VoidOperationRequest request) {
+		return paymentId.equals(request.paymentId())
+				&& amountMinor == request.amountMinor()
+				&& currency.equals(request.currency())
+				&& "VOID".equals(operationType)
+				&& authorizationPspOperationId != null
+				&& authorizationPspOperationId.equals(request.authorizationPspOperationId());
+	}
 }

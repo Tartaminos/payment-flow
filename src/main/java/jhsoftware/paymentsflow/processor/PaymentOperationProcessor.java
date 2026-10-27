@@ -21,6 +21,7 @@ class PaymentOperationProcessor {
 	private final PaymentOperationProcessingRepository repository;
 	private final PaymentOperationAttemptExecutor attemptExecutor;
 	private final PaymentOperationCaptureAttemptExecutor captureAttemptExecutor;
+	private final PaymentOperationVoidAttemptExecutor voidAttemptExecutor;
 	private final ReconciliationScannerHealth scannerHealth;
 	private final Clock clock;
 
@@ -29,12 +30,14 @@ class PaymentOperationProcessor {
 			PaymentOperationProcessingRepository repository,
 			PaymentOperationAttemptExecutor attemptExecutor,
 			PaymentOperationCaptureAttemptExecutor captureAttemptExecutor,
+			PaymentOperationVoidAttemptExecutor voidAttemptExecutor,
 			ReconciliationScannerHealth scannerHealth,
 			Clock clock) {
 		this.decoder = decoder;
 		this.repository = repository;
 		this.attemptExecutor = attemptExecutor;
 		this.captureAttemptExecutor = captureAttemptExecutor;
+		this.voidAttemptExecutor = voidAttemptExecutor;
 		this.scannerHealth = scannerHealth;
 		this.clock = clock;
 	}
@@ -76,6 +79,7 @@ class PaymentOperationProcessor {
 		boolean ackEligible = switch (context.operationType()) {
 			case "AUTHORIZE" -> attemptExecutor.execute(context, command.correlationId(), command.causationId());
 			case "CAPTURE" -> captureAttemptExecutor.execute(context, command.correlationId(), command.causationId());
+			case "VOID" -> voidAttemptExecutor.execute(context, command.correlationId(), command.causationId());
 			default -> rejectUnsupportedType(command.operationId(), context.operationType());
 		};
 		if (!ackEligible) {
