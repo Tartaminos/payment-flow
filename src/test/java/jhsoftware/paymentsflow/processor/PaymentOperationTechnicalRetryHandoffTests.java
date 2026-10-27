@@ -34,10 +34,12 @@ class PaymentOperationTechnicalRetryHandoffTests {
 	private final PaymentOperationQuarantineRepository quarantineRepository = mock(PaymentOperationQuarantineRepository.class);
 	private final PaymentOperationQuarantinePublisher quarantinePublisher = mock(PaymentOperationQuarantinePublisher.class);
 	private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+	private final PaymentOperationQuarantineHandoff quarantineHandoff =
+			new PaymentOperationQuarantineHandoff(quarantineRepository, quarantinePublisher, clock);
 
 	private final PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
 			rawValueDecoder, commandDecoder, processor, classifier, retryPublisher,
-			quarantineRepository, quarantinePublisher, clock);
+			quarantineHandoff, clock);
 
 	@Test
 	void successfulProcessingReturnsItsResultWithoutClassifyingOrPublishing() {

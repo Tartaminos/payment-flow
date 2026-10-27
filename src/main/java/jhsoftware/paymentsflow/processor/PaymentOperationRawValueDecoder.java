@@ -35,6 +35,10 @@ class PaymentOperationRawValueDecoder {
 	}
 
 	synchronized GenericRecord decode(String topic, byte[] bytes) {
+		return decode(topic, bytes, COMMAND_RECORD);
+	}
+
+	synchronized GenericRecord decode(String topic, byte[] bytes, String expectedRecordName) {
 		if (bytes == null || bytes.length < 5 || bytes[0] != 0) {
 			throw new PoisonCommandException(PoisonFailureCode.CORRUPTED_WIRE_FORMAT);
 		}
@@ -43,7 +47,7 @@ class PaymentOperationRawValueDecoder {
 			if (!(value instanceof GenericRecord record)) {
 				throw new PoisonCommandException(PoisonFailureCode.INVALID_AVRO_PAYLOAD);
 			}
-			if (!COMMAND_RECORD.equals(record.getSchema().getFullName())) {
+			if (!expectedRecordName.equals(record.getSchema().getFullName())) {
 				throw new PoisonCommandException(PoisonFailureCode.UNSUPPORTED_SCHEMA);
 			}
 			return record;
@@ -64,6 +68,17 @@ class PaymentOperationRawValueDecoder {
 					: PoisonFailureCode.UNSUPPORTED_SCHEMA;
 			throw new PoisonCommandException(code, exception);
 		}
+	}
+
+	int schemaId(byte[] bytes) {
+		if (bytes == null || bytes.length < 5 || bytes[0] != 0) {
+			throw new PoisonCommandException(PoisonFailureCode.CORRUPTED_WIRE_FORMAT);
+		}
+		int schemaId = java.nio.ByteBuffer.wrap(bytes, 1, Integer.BYTES).getInt();
+		if (schemaId < 0) {
+			throw new PoisonCommandException(PoisonFailureCode.CORRUPTED_WIRE_FORMAT);
+		}
+		return schemaId;
 	}
 
 	private boolean hasNetworkFailure(Throwable failure) {

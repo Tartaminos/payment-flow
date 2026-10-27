@@ -117,7 +117,7 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 				SOURCE_TOPIC, 1, 401L, sourceKey, sourceValue);
 		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
 				rawValueDecoder, commandDecoder, mock(PaymentOperationProcessor.class), classifier, retryPublisher,
-				quarantineRepository, quarantinePublisher, clock);
+				new PaymentOperationQuarantineHandoff(quarantineRepository, quarantinePublisher, clock), clock);
 		UUID quarantineId = PaymentOperationRetryIdentity.quarantineId(SOURCE_TOPIC, 1, 401L);
 
 		try (KafkaConsumer<String, byte[]> dlqConsumer = topicConsumer("m5-02-dlq")) {
@@ -155,7 +155,7 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 				brokenKafkaTemplate, paymentOperationQuarantineSchema, quarantineSchemaRegistryContract);
 		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
 				rawValueDecoder, commandDecoder, mock(PaymentOperationProcessor.class), classifier, retryPublisher,
-				quarantineRepository, brokenPublisher, clock);
+				new PaymentOperationQuarantineHandoff(quarantineRepository, brokenPublisher, clock), clock);
 		ConsumerRecord<byte[], Object> record = new ConsumerRecord<>(
 				SOURCE_TOPIC, 2, 402L, new byte[] {9, 8}, new byte[] {1, 2, 3});
 		UUID quarantineId = PaymentOperationRetryIdentity.quarantineId(SOURCE_TOPIC, 2, 402L);
@@ -189,7 +189,9 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 				new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
 		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
 				rawValueDecoder, commandDecoder, failingProcessor, classifier, retryPublisher,
-				mock(PaymentOperationQuarantineRepository.class), mock(PaymentOperationQuarantinePublisher.class), clock);
+				new PaymentOperationQuarantineHandoff(
+						mock(PaymentOperationQuarantineRepository.class),
+						mock(PaymentOperationQuarantinePublisher.class), clock), clock);
 
 		try (KafkaConsumer<String, byte[]> retryConsumer = retryTopicConsumer()) {
 			retryConsumer.subscribe(List.of(PaymentOperationRetryMessagingConfiguration.TOPIC));
@@ -234,7 +236,9 @@ class PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests {
 				new org.springframework.dao.DataAccessResourceFailureException("database unavailable"));
 		PaymentOperationTechnicalRetryHandoff handoff = new PaymentOperationTechnicalRetryHandoff(
 				rawValueDecoder, commandDecoder, failingProcessor, classifier, retryPublisher,
-				mock(PaymentOperationQuarantineRepository.class), mock(PaymentOperationQuarantinePublisher.class), clock);
+				new PaymentOperationQuarantineHandoff(
+						mock(PaymentOperationQuarantineRepository.class),
+						mock(PaymentOperationQuarantinePublisher.class), clock), clock);
 
 		try (KafkaConsumer<String, byte[]> retryConsumer = retryTopicConsumer()) {
 			retryConsumer.subscribe(List.of(PaymentOperationRetryMessagingConfiguration.TOPIC));

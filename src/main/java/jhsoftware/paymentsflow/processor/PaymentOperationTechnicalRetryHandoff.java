@@ -26,8 +26,7 @@ class PaymentOperationTechnicalRetryHandoff {
 	private final PaymentOperationProcessor processor;
 	private final TechnicalFailureClassifier classifier;
 	private final PaymentOperationRetryPublisher retryPublisher;
-	private final PaymentOperationQuarantineRepository quarantineRepository;
-	private final PaymentOperationQuarantinePublisher quarantinePublisher;
+	private final PaymentOperationQuarantineHandoff quarantineHandoff;
 	private final Clock clock;
 
 	PaymentOperationTechnicalRetryHandoff(
@@ -36,16 +35,14 @@ class PaymentOperationTechnicalRetryHandoff {
 			PaymentOperationProcessor processor,
 			TechnicalFailureClassifier classifier,
 			PaymentOperationRetryPublisher retryPublisher,
-			PaymentOperationQuarantineRepository quarantineRepository,
-			PaymentOperationQuarantinePublisher quarantinePublisher,
+			PaymentOperationQuarantineHandoff quarantineHandoff,
 			Clock clock) {
 		this.rawValueDecoder = rawValueDecoder;
 		this.commandDecoder = commandDecoder;
 		this.processor = processor;
 		this.classifier = classifier;
 		this.retryPublisher = retryPublisher;
-		this.quarantineRepository = quarantineRepository;
-		this.quarantinePublisher = quarantinePublisher;
+		this.quarantineHandoff = quarantineHandoff;
 		this.clock = clock;
 	}
 
@@ -73,29 +70,9 @@ class PaymentOperationTechnicalRetryHandoff {
 			byte[] rawValue,
 			GenericRecord decoded,
 			PoisonCommandException failure) {
-		UUID quarantineId = PaymentOperationRetryIdentity.quarantineId(
-				record.topic(), record.partition(), record.offset());
 		PaymentOperationCommand command = bestEffortDecodedCommand(decoded);
-		PaymentOperationQuarantineEnvelope envelope = new PaymentOperationQuarantineEnvelope(
-				quarantineId,
-				record.topic(),
-				record.partition(),
-				record.offset(),
-				sourceKeyBytes(record.key()),
-				rawValue,
-				failure.failureCode().name(),
-				clock.instant(),
-				command == null ? null : command.operationId(),
-				command == null ? null : command.correlationId(),
-				command == null ? null : command.messageId());
-
-		quarantineRepository.persist(envelope);
-		if (!quarantinePublisher.publish(envelope)) {
-			throw failure;
-		}
-		logger.warn("Poison command at {}-{}-{} quarantined as {} with code {}",
-				record.topic(), record.partition(), record.offset(), quarantineId, failure.failureCode());
-		return true;
+		return quarantineHandoff.quarantine(
+				record, rawValue, failure, PaymentOperationQuarantineHandoff.Identities.from(command));
 	}
 
 	private boolean handOffToRetryTopic(
