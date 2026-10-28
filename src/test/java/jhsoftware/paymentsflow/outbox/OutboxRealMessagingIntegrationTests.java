@@ -23,6 +23,8 @@ import java.util.stream.IntStream;
 import com.jayway.jsonpath.JsonPath;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -32,8 +34,10 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -44,6 +48,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.junit.jupiter.Container;
@@ -203,6 +208,63 @@ class OutboxRealMessagingIntegrationTests {
 			assertThat(delivery.get("status")).isEqualTo("PUBLISHED");
 			assertThat(delivery.get("claimed_by")).isNull();
 		});
+	}
+
+	@Test
+	void realBrokerOutageLeavesOutboxPendingAndTheSameMessageRecoversWhenBrokerReturns() throws Exception {
+		UUID messageId = seedAcceptedPayment(99);
+		DefaultKafkaProducerFactory<String, Object> unavailableFactory = unavailableProducerFactory();
+		KafkaTemplate<String, Object> unavailableKafka = new KafkaTemplate<>(unavailableFactory);
+		OutboxPublisher unavailablePublisher = new OutboxPublisher(
+				publicationRepository,
+				unavailableKafka,
+				executePaymentOperationSchema,
+				schemaRegistryContract,
+				messagingProperties,
+				clock,
+				meterRegistry);
+
+		try {
+			unavailablePublisher.publishPending();
+			Map<String, Object> pending = jdbcTemplate.queryForMap(
+					"SELECT status, published_at FROM outbox_events WHERE message_id = ?", messageId);
+			assertThat(pending).containsEntry("status", "PENDING");
+			assertThat(pending.get("published_at")).isNull();
+
+			jdbcTemplate.update(
+					"UPDATE outbox_events SET next_eligible_at = CURRENT_TIMESTAMP WHERE message_id = ?", messageId);
+			try (KafkaConsumer<byte[], Object> consumer = consumer()) {
+				consumer.subscribe(List.of(TOPIC));
+				awaitAssignment(consumer);
+				publisher.publishPending();
+
+				ConsumerRecord<byte[], Object> recovered = awaitMessage(consumer, messageId);
+				assertThat(((GenericRecord) recovered.value()).get("messageId").toString())
+						.isEqualTo(messageId.toString());
+			}
+
+			assertThat(jdbcTemplate.queryForObject(
+					"SELECT status FROM outbox_events WHERE message_id = ?", String.class, messageId))
+					.isEqualTo("PUBLISHED");
+		}
+		finally {
+			unavailableFactory.destroy();
+		}
+	}
+
+	private DefaultKafkaProducerFactory<String, Object> unavailableProducerFactory() {
+		Map<String, Object> properties = new java.util.HashMap<>();
+		properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:1");
+		properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+		properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
+		properties.put(ProducerConfig.ACKS_CONFIG, "all");
+		properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 500L);
+		properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 500);
+		properties.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 1000);
+		properties.put("schema.registry.url", "http://localhost:8082");
+		properties.put("auto.register.schemas", false);
+		properties.put("value.subject.name.strategy", RecordNameStrategy.class.getName());
+		return new DefaultKafkaProducerFactory<>(properties);
 	}
 
 	private UUID seedAcceptedPayment(int index) {

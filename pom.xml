@@ -203,4 +203,47 @@
 		</plugins>
 	</build>
 
+	<profiles>
+		<profile>
+			<id>m6-failure-recovery</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<forkCount>1</forkCount>
+							<reuseForks>false</reuseForks>
+							<systemPropertyVariables>
+								<paymentflow.real-messaging-test>true</paymentflow.real-messaging-test>
+							</systemPropertyVariables>
+							<includes>
+								<include>**/M6EndToEndFailureRecoveryIntegrationTests.java</include>
+								<include>**/PaymentAdmissionIntegrationTests.java</include>
+								<include>**/CaptureAdmissionIntegrationTests.java</include>
+								<include>**/VoidAdmissionIntegrationTests.java</include>
+								<include>**/OutboxPublisherTests.java</include>
+								<include>**/OutboxRealMessagingIntegrationTests.java</include>
+								<include>**/PaymentOperationCommandListenerTests.java</include>
+								<include>**/PaymentOperationRebalanceListenerTests.java</include>
+								<include>**/PaymentWorkAdmissionTests.java</include>
+								<include>**/PaymentOperationProcessingRepositoryTests.java</include>
+								<include>**/PaymentOperationAttemptExecutorTests.java</include>
+								<include>**/PaymentOperationCaptureAttemptExecutorTests.java</include>
+								<include>**/PaymentOperationVoidAttemptExecutorTests.java</include>
+								<include>**/PaymentOperationTechnicalRetryHandoffRealMessagingIntegrationTests.java</include>
+								<include>**/PaymentOperationRetrySchedulerRealMessagingIntegrationTests.java</include>
+								<include>**/ScheduledRetryDispatcherRealMessagingIntegrationTests.java</include>
+								<include>**/ReconciliationJobRepositoryTests.java</include>
+								<include>**/ReconciliationEscalationRepositoryTests.java</include>
+								<include>**/UnknownOperationReconciliationScannerTests.java</include>
+								<include>**/RetentionCleanupRepositoryTests.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 </project>

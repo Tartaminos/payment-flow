@@ -34,6 +34,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.kafka.core.KafkaTemplate;
 
 class OutboxPublisherTests {
@@ -103,6 +104,31 @@ class OutboxPublisherTests {
 		ArgumentCaptor<Instant> nextEligibleAt = ArgumentCaptor.forClass(Instant.class);
 		verify(repository).releaseForRetry(eq(MESSAGE_ID), any(), nextEligibleAt.capture());
 		assertThat(nextEligibleAt.getValue()).isEqualTo(PUBLISHED_AT.plusSeconds(5));
+	}
+
+	@Test
+	void brokerAcknowledgementFollowedByDatabaseFailureKeepsTheOriginalMessageRetryable() throws Exception {
+		OutboxPublicationRepository repository = mock(OutboxPublicationRepository.class);
+		@SuppressWarnings("unchecked")
+		KafkaTemplate<String, Object> kafkaTemplate = mock(KafkaTemplate.class);
+		OutboxPublication publication = publication(PAYMENT_ID, 1);
+		when(repository.claimPending(eq(20), any(), any(), any())).thenReturn(List.of(publication));
+		when(kafkaTemplate.send(eq(OutboxMessagingConfiguration.TOPIC), eq(PAYMENT_ID.toString()), any()))
+				.thenReturn(CompletableFuture.completedFuture(null));
+		when(repository.markPublished(eq(MESSAGE_ID), any(), any()))
+				.thenThrow(new DataAccessResourceFailureException("database unavailable after broker ack"));
+		when(repository.releaseForRetry(eq(MESSAGE_ID), any(), any())).thenReturn(true);
+
+		publisher(repository, kafkaTemplate, new OutboxMessagingConfiguration().executePaymentOperationSchema(),
+				Clock.fixed(PUBLISHED_AT, ZoneOffset.UTC))
+				.publishPending();
+
+		ArgumentCaptor<Object> publishedValue = ArgumentCaptor.forClass(Object.class);
+		verify(kafkaTemplate).send(
+				eq(OutboxMessagingConfiguration.TOPIC), eq(PAYMENT_ID.toString()), publishedValue.capture());
+		assertThat(((GenericRecord) publishedValue.getValue()).get("messageId").toString())
+				.isEqualTo(MESSAGE_ID.toString());
+		verify(repository).releaseForRetry(eq(MESSAGE_ID), any(), eq(PUBLISHED_AT.plusSeconds(5)));
 	}
 
 	@Test
