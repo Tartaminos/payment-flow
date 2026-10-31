@@ -1,4 +1,14 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.controller;
+
+import jhsoftware.pspsimulator.dto.AuthorizeOperationRequestDto;
+import jhsoftware.pspsimulator.dto.CaptureOperationRequestDto;
+import jhsoftware.pspsimulator.dto.OperationDecisionResponseDto;
+import jhsoftware.pspsimulator.dto.VoidOperationRequestDto;
+import jhsoftware.pspsimulator.exception.PspOperationNotFoundException;
+import jhsoftware.pspsimulator.model.AuthorizeOperationResult;
+import jhsoftware.pspsimulator.model.CaptureOperationResult;
+import jhsoftware.pspsimulator.model.VoidOperationResult;
+import jhsoftware.pspsimulator.service.PspOperationService;
 
 import java.util.UUID;
 
@@ -22,7 +32,7 @@ class PspOperationController {
 	}
 
 	@PostMapping("/simulator/operations/authorize")
-	ResponseEntity<OperationDecisionResponse> authorize(@Valid @RequestBody AuthorizeOperationRequest request) {
+	ResponseEntity<OperationDecisionResponseDto> authorize(@Valid @RequestBody AuthorizeOperationRequestDto request) {
 		AuthorizeOperationResult result = service.authorize(request);
 		if (result.stillProcessing()) {
 			return ResponseEntity.status(HttpStatus.ACCEPTED).body(result.decision());
@@ -31,7 +41,7 @@ class PspOperationController {
 	}
 
 	@PostMapping("/simulator/operations/capture")
-	ResponseEntity<OperationDecisionResponse> capture(@Valid @RequestBody CaptureOperationRequest request) {
+	ResponseEntity<OperationDecisionResponseDto> capture(@Valid @RequestBody CaptureOperationRequestDto request) {
 		CaptureOperationResult result = service.capture(request);
 		if (result.stillProcessing()) {
 			return ResponseEntity.status(HttpStatus.ACCEPTED).body(result.decision());
@@ -40,7 +50,7 @@ class PspOperationController {
 	}
 
 	@PostMapping("/simulator/operations/void")
-	ResponseEntity<OperationDecisionResponse> voidOperation(@Valid @RequestBody VoidOperationRequest request) {
+	ResponseEntity<OperationDecisionResponseDto> voidOperation(@Valid @RequestBody VoidOperationRequestDto request) {
 		VoidOperationResult result = service.voidOperation(request);
 		if (result.stillProcessing()) {
 			return ResponseEntity.status(HttpStatus.ACCEPTED).body(result.decision());
@@ -49,7 +59,7 @@ class PspOperationController {
 	}
 
 	@GetMapping("/simulator/operations/{pspOperationId}")
-	ResponseEntity<OperationDecisionResponse> findByPspOperationId(@PathVariable UUID pspOperationId) {
+	ResponseEntity<OperationDecisionResponseDto> findByPspOperationId(@PathVariable UUID pspOperationId) {
 		return service.findDecision(pspOperationId)
 				.map(ResponseEntity::ok)
 				.orElseThrow(PspOperationNotFoundException::new);

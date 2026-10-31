@@ -1,8 +1,8 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.dto;
 
 import java.time.Instant;
 import java.util.UUID;
 
-record OperationDecisionResponse(
+public record OperationDecisionResponseDto(
 		UUID pspOperationId, String result, String reasonCode, String validity, Instant validityEvidenceAt) {
 }

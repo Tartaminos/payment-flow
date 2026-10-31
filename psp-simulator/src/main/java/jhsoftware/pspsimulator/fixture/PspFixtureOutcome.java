@@ -1,6 +1,6 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.fixture;
 
-enum PspFixtureOutcome {
+public enum PspFixtureOutcome {
 	APPROVED,
 	APPROVED_EXPIRED_AUTHORIZATION,
 	DECLINED,

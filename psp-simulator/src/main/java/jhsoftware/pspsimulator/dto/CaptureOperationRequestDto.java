@@ -1,4 +1,4 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.dto;
 
 import java.util.UUID;
 
@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
-record CaptureOperationRequest(
+public record CaptureOperationRequestDto(
 		@NotNull UUID pspOperationId,
 		@NotNull UUID merchantId,
 		@NotNull UUID paymentId,

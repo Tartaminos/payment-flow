@@ -31,7 +31,7 @@ public class CaptureAuthorizationValidityClient {
 						if (!response.getStatusCode().is2xxSuccessful()) {
 							return AuthorizationValidityEvidence.unknown();
 						}
-						CaptureValidityResponseBody body = response.bodyTo(CaptureValidityResponseBody.class);
+						CaptureValidityResponseDto body = response.bodyTo(CaptureValidityResponseDto.class);
 						return toEvidence(body);
 					});
 		}
@@ -51,7 +51,7 @@ public class CaptureAuthorizationValidityClient {
 		}
 	}
 
-	private AuthorizationValidityEvidence toEvidence(CaptureValidityResponseBody body) {
+	private AuthorizationValidityEvidence toEvidence(CaptureValidityResponseDto body) {
 		if (body == null || body.validity() == null) {
 			return AuthorizationValidityEvidence.unknown();
 		}

@@ -1,4 +1,6 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.repository;
+
+import jhsoftware.pspsimulator.model.PspOperationRecord;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -12,7 +14,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 @Repository
-class PspOperationRepository {
+public class PspOperationRepository {
 
 	private final JdbcClient jdbcClient;
 
@@ -20,7 +22,7 @@ class PspOperationRepository {
 		this.jdbcClient = jdbcClient;
 	}
 
-	Optional<PspOperationRecord> findByMerchantAndPspOperationId(UUID merchantId, UUID pspOperationId) {
+	public Optional<PspOperationRecord> findByMerchantAndPspOperationId(UUID merchantId, UUID pspOperationId) {
 		return jdbcClient.sql("""
 				SELECT id, merchant_id, psp_operation_id, payment_id, amount_minor, currency, decision, decision_reason,
 				       operation_type, authorization_psp_operation_id, validity, validity_evidence_at, created_at
@@ -33,7 +35,7 @@ class PspOperationRepository {
 				.optional();
 	}
 
-	Optional<PspOperationRecord> findByPspOperationId(UUID pspOperationId) {
+	public Optional<PspOperationRecord> findByPspOperationId(UUID pspOperationId) {
 		return jdbcClient.sql("""
 				SELECT id, merchant_id, psp_operation_id, payment_id, amount_minor, currency, decision, decision_reason,
 				       operation_type, authorization_psp_operation_id, validity, validity_evidence_at, created_at
@@ -45,7 +47,7 @@ class PspOperationRepository {
 				.optional();
 	}
 
-	void insert(
+	public void insert(
 			UUID merchantId,
 			UUID pspOperationId,
 			UUID paymentId,

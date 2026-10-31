@@ -1,4 +1,4 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.config;
 
 import java.time.Clock;
 

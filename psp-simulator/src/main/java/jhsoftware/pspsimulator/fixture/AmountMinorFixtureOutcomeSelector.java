@@ -1,9 +1,9 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.fixture;
 
 import org.springframework.stereotype.Component;
 
 @Component
-class AmountMinorFixtureOutcomeSelector {
+public class AmountMinorFixtureOutcomeSelector {
 
 	private static final long BAND_SIZE = 1000L;
 	private static final long APPROVED_EXPIRED_AUTHORIZATION_BAND_START = 650L;
@@ -13,7 +13,7 @@ class AmountMinorFixtureOutcomeSelector {
 	private static final long FAULT_COMMITTED_REPLY_DROPPED_BAND_START = 900L;
 	private static final long FAULT_UNPROCESSED_BAND_START = 950L;
 
-	PspFixtureOutcome outcomeFor(long amountMinor) {
+	public PspFixtureOutcome outcomeFor(long amountMinor) {
 		long band = amountMinor % BAND_SIZE;
 		if (band >= FAULT_UNPROCESSED_BAND_START) {
 			return PspFixtureOutcome.FAULT_UNPROCESSED;

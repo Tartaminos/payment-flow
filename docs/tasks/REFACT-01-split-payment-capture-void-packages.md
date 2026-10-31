@@ -1,6 +1,6 @@
 # REFACT-01 — Split Capture/Void Verticals Out of `payment`
 
-**Status:** PROPOSED (2026-10-27). Not yet approved for Codex execution; requires explicit user approval before implementation, same as any other task in this folder.
+**Status:** SUPERSEDED (2026-10-31) by [ADR-0024 — Packages by responsibility and explicit DTO names](../adr/0024-organize-java-packages-by-responsibility.md). The original proposal below was not implemented and is retained as historical context, not pending execution scope. The approved replacement organizes `payment`, `processor` and the simulator by responsibility; see the [current package guide](../architecture/package-organization.md).
 
 ## Objective
 

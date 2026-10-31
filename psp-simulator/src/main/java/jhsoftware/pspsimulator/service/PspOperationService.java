@@ -1,4 +1,21 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.service;
+
+import jhsoftware.pspsimulator.dto.AuthorizeOperationRequestDto;
+import jhsoftware.pspsimulator.dto.CaptureOperationRequestDto;
+import jhsoftware.pspsimulator.dto.OperationDecisionResponseDto;
+import jhsoftware.pspsimulator.dto.VoidOperationRequestDto;
+import jhsoftware.pspsimulator.exception.PspOperationConflictException;
+import jhsoftware.pspsimulator.exception.PspReplyDroppedFaultException;
+import jhsoftware.pspsimulator.exception.PspUnprocessedFaultException;
+import jhsoftware.pspsimulator.fixture.AmountMinorFixtureOutcomeSelector;
+import jhsoftware.pspsimulator.fixture.CaptureFixtureOutcomeSelector;
+import jhsoftware.pspsimulator.fixture.PspFixtureOutcome;
+import jhsoftware.pspsimulator.fixture.VoidFixtureOutcomeSelector;
+import jhsoftware.pspsimulator.model.AuthorizeOperationResult;
+import jhsoftware.pspsimulator.model.CaptureOperationResult;
+import jhsoftware.pspsimulator.model.PspOperationRecord;
+import jhsoftware.pspsimulator.model.VoidOperationResult;
+import jhsoftware.pspsimulator.repository.PspOperationRepository;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -9,7 +26,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Service
-class PspOperationService {
+public class PspOperationService {
 
 	private static final String AUTHORIZATION_EXPIRED_REASON = "AUTHORIZATION_EXPIRED";
 
@@ -32,7 +49,7 @@ class PspOperationService {
 		this.clock = clock;
 	}
 
-	AuthorizeOperationResult authorize(AuthorizeOperationRequest request) {
+	public AuthorizeOperationResult authorize(AuthorizeOperationRequestDto request) {
 		Optional<PspOperationRecord> existing = repository.findByMerchantAndPspOperationId(
 				request.merchantId(), request.pspOperationId());
 		if (existing.isPresent()) {
@@ -76,11 +93,11 @@ class PspOperationService {
 		}
 
 		return new AuthorizeOperationResult(
-				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, validity, now),
+				new OperationDecisionResponseDto(request.pspOperationId(), decision, decisionReason, validity, now),
 				fixtureOutcome == PspFixtureOutcome.PROCESSING);
 	}
 
-	CaptureOperationResult capture(CaptureOperationRequest request) {
+	public CaptureOperationResult capture(CaptureOperationRequestDto request) {
 		Optional<PspOperationRecord> existing = repository.findByMerchantAndPspOperationId(
 				request.merchantId(), request.pspOperationId());
 		if (existing.isPresent()) {
@@ -136,11 +153,11 @@ class PspOperationService {
 		}
 
 		return new CaptureOperationResult(
-				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, null, now),
+				new OperationDecisionResponseDto(request.pspOperationId(), decision, decisionReason, null, now),
 				fixtureOutcome == PspFixtureOutcome.PROCESSING);
 	}
 
-	VoidOperationResult voidOperation(VoidOperationRequest request) {
+	public VoidOperationResult voidOperation(VoidOperationRequestDto request) {
 		Optional<PspOperationRecord> existing = repository.findByMerchantAndPspOperationId(
 				request.merchantId(), request.pspOperationId());
 		if (existing.isPresent()) {
@@ -196,13 +213,13 @@ class PspOperationService {
 		}
 
 		return new VoidOperationResult(
-				new OperationDecisionResponse(request.pspOperationId(), decision, decisionReason, null, now),
+				new OperationDecisionResponseDto(request.pspOperationId(), decision, decisionReason, null, now),
 				fixtureOutcome == PspFixtureOutcome.PROCESSING);
 	}
 
-	Optional<OperationDecisionResponse> findDecision(UUID pspOperationId) {
+	public Optional<OperationDecisionResponseDto> findDecision(UUID pspOperationId) {
 		return repository.findByPspOperationId(pspOperationId)
-				.map(operation -> new OperationDecisionResponse(
+				.map(operation -> new OperationDecisionResponseDto(
 						operation.pspOperationId(),
 						operation.decision(),
 						operation.decisionReason(),
@@ -210,21 +227,21 @@ class PspOperationService {
 						operation.validityEvidenceAt()));
 	}
 
-	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, AuthorizeOperationRequest request) {
+	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, AuthorizeOperationRequestDto request) {
 		if (!existing.matches(request)) {
 			throw new PspOperationConflictException();
 		}
 		return existing;
 	}
 
-	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, CaptureOperationRequest request) {
+	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, CaptureOperationRequestDto request) {
 		if (!existing.matches(request)) {
 			throw new PspOperationConflictException();
 		}
 		return existing;
 	}
 
-	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, VoidOperationRequest request) {
+	private PspOperationRecord resolveOrConflict(PspOperationRecord existing, VoidOperationRequestDto request) {
 		if (!existing.matches(request)) {
 			throw new PspOperationConflictException();
 		}
@@ -233,7 +250,7 @@ class PspOperationService {
 
 	private VoidOperationResult toVoidResult(PspOperationRecord record) {
 		return new VoidOperationResult(
-				new OperationDecisionResponse(
+				new OperationDecisionResponseDto(
 						record.pspOperationId(),
 						record.decision(),
 						record.decisionReason(),
@@ -244,7 +261,7 @@ class PspOperationService {
 
 	private CaptureOperationResult toCaptureResult(PspOperationRecord record) {
 		return new CaptureOperationResult(
-				new OperationDecisionResponse(
+				new OperationDecisionResponseDto(
 						record.pspOperationId(),
 						record.decision(),
 						record.decisionReason(),
@@ -255,7 +272,7 @@ class PspOperationService {
 
 	private AuthorizeOperationResult toResult(PspOperationRecord record) {
 		return new AuthorizeOperationResult(
-				new OperationDecisionResponse(
+				new OperationDecisionResponseDto(
 						record.pspOperationId(),
 						record.decision(),
 						record.decisionReason(),

@@ -84,6 +84,8 @@ Documentation is the source of truth for decisions made during the system-design
 - [ADR-0021 — Small local MVP topology: 4 partitions / 1 consumer / 4 workers](docs/adr/0021-small-mvp-kafka-partition-and-worker-topology.md) — set a deliberately modest main-topic/Payment Processor baseline, preserving per-payment exclusion and safe Kafka offset commits. Retry/DLQ topology remains undecided.
 - [ADR-0022 — Bounded per-payment waiting FIFO](docs/adr/0022-bounded-per-payment-waiting-queue.md) — commands received while their payment is busy may wait in a bounded local per-payment queue; waiting does not acknowledge Kafka, override DB eligibility, or count as a technical retry.
 - [ADR-0023 — Single configured merchant for MVP](docs/adr/0023-configured-single-merchant-for-educational-mvp.md) — use a stable synthetic merchant UUID from application configuration; no unauthenticated client-provided merchant header.
+- [ADR-0024 — Packages by responsibility and explicit DTO names](docs/adr/0024-organize-java-packages-by-responsibility.md) — accepted organization of `payment`, `processor` and the PSP simulator; transport DTOs use the `Dto` suffix.
+- [Java package guide](docs/architecture/package-organization.md) — current package responsibilities, naming, visibility and test placement across both Maven projects.
 
 Future system-design artifacts (functional/non-functional requirements, high-level architecture, event contracts, failure analysis, and further ADRs) will be added **as they are discussed and approved**.
 
@@ -110,7 +112,7 @@ Future system-design artifacts (functional/non-functional requirements, high-lev
 - **Local development candidate:** Docker Compose
 - **Testing candidates:** JUnit and Testcontainers
 
-Implementation library versions and internal code organization remain Architect responsibilities; the accepted milestone contracts now specify externally observable service boundaries, event contracts, database obligations and failure behavior.
+Implementation library versions remain Architect responsibilities. Internal code organization follows [ADR-0024](docs/adr/0024-organize-java-packages-by-responsibility.md) and the [package guide](docs/architecture/package-organization.md); the accepted milestone contracts specify externally observable service boundaries, event contracts, database obligations and failure behavior.
 
 ## Safety boundary
 

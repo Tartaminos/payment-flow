@@ -1,9 +1,13 @@
-package jhsoftware.pspsimulator;
+package jhsoftware.pspsimulator.model;
+
+import jhsoftware.pspsimulator.dto.AuthorizeOperationRequestDto;
+import jhsoftware.pspsimulator.dto.CaptureOperationRequestDto;
+import jhsoftware.pspsimulator.dto.VoidOperationRequestDto;
 
 import java.time.Instant;
 import java.util.UUID;
 
-record PspOperationRecord(
+public record PspOperationRecord(
 		UUID id,
 		UUID merchantId,
 		UUID pspOperationId,
@@ -18,13 +22,13 @@ record PspOperationRecord(
 		Instant validityEvidenceAt,
 		Instant createdAt) {
 
-	boolean matches(AuthorizeOperationRequest request) {
+	public boolean matches(AuthorizeOperationRequestDto request) {
 		return paymentId.equals(request.paymentId())
 				&& amountMinor == request.amountMinor()
 				&& currency.equals(request.currency());
 	}
 
-	boolean matches(CaptureOperationRequest request) {
+	public boolean matches(CaptureOperationRequestDto request) {
 		return paymentId.equals(request.paymentId())
 				&& amountMinor == request.amountMinor()
 				&& currency.equals(request.currency())
@@ -33,7 +37,7 @@ record PspOperationRecord(
 				&& authorizationPspOperationId.equals(request.authorizationPspOperationId());
 	}
 
-	boolean matches(VoidOperationRequest request) {
+	public boolean matches(VoidOperationRequestDto request) {
 		return paymentId.equals(request.paymentId())
 				&& amountMinor == request.amountMinor()
 				&& currency.equals(request.currency())
