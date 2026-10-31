@@ -1,9 +1,10 @@
 package jhsoftware.paymentsflow;
 
-import jhsoftware.paymentsflow.payment.PaymentProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+
+import jhsoftware.paymentsflow.payment.config.PaymentProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties(PaymentProperties.class)
