@@ -1,0 +1,122 @@
+package jhsoftware.paymentsflow.processor.messaging;
+
+import jhsoftware.paymentsflow.processor.config.ProcessorProperties;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.net.URI;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
+
+class PaymentOperationWorkerPoolTests {
+
+	@Test
+	void inFlightTaskCompletesDuringControlledShutdown() throws InterruptedException {
+		PaymentOperationWorkerPool pool = new PaymentOperationWorkerPool(properties(1));
+		CountDownLatch started = new CountDownLatch(1);
+		CountDownLatch finished = new CountDownLatch(1);
+
+		pool.submit(() -> {
+			started.countDown();
+			try {
+				Thread.sleep(100);
+			}
+			catch (InterruptedException exception) {
+				Thread.currentThread().interrupt();
+			}
+			finished.countDown();
+		});
+
+		assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+		pool.shutdown();
+
+		assertThat(finished.getCount()).isZero();
+	}
+
+	@Test
+	void noNewSubmissionIsAcceptedAfterShutdown() {
+		PaymentOperationWorkerPool pool = new PaymentOperationWorkerPool(properties(1));
+		pool.shutdown();
+
+		assertThatThrownBy(() -> pool.submit(() -> { }))
+				.isInstanceOf(RejectedExecutionException.class);
+	}
+
+	@Test
+	void submittedTaskCopiesCallerMdcContextAndClearsItAfterCompletion() throws InterruptedException {
+		PaymentOperationWorkerPool pool = new PaymentOperationWorkerPool(properties(1));
+		AtomicReference<String> observedCorrelationId = new AtomicReference<>();
+		AtomicReference<Map<String, String>> observedContextAfterRun = new AtomicReference<>();
+		CountDownLatch finished = new CountDownLatch(1);
+
+		try {
+			MDC.put("correlationId", "caller-correlation-id");
+
+			pool.submit(() -> {
+				observedCorrelationId.set(MDC.get("correlationId"));
+				finished.countDown();
+			});
+
+			assertThat(finished.await(5, TimeUnit.SECONDS)).isTrue();
+		}
+		finally {
+			MDC.clear();
+		}
+
+		assertThat(observedCorrelationId.get()).isEqualTo("caller-correlation-id");
+		assertThat(MDC.get("correlationId")).isNull();
+
+		pool.shutdown();
+	}
+
+	@Test
+	void mdcDoesNotLeakIntoASubsequentlySubmittedTaskOnTheSamePooledThread() throws InterruptedException {
+		PaymentOperationWorkerPool pool = new PaymentOperationWorkerPool(properties(1));
+		CountDownLatch firstFinished = new CountDownLatch(1);
+		CountDownLatch secondFinished = new CountDownLatch(1);
+		AtomicReference<String> secondTaskCorrelationId = new AtomicReference<>();
+
+		try {
+			MDC.put("correlationId", "first-task-correlation-id");
+			pool.submit(firstFinished::countDown);
+			assertThat(firstFinished.await(5, TimeUnit.SECONDS)).isTrue();
+		}
+		finally {
+			MDC.clear();
+		}
+
+		pool.submit(() -> {
+			secondTaskCorrelationId.set(MDC.get("correlationId"));
+			secondFinished.countDown();
+		});
+		assertThat(secondFinished.await(5, TimeUnit.SECONDS)).isTrue();
+
+		assertThat(secondTaskCorrelationId.get()).isNull();
+
+		pool.shutdown();
+	}
+
+	private ProcessorProperties properties(int workerPoolSize) {
+		return new ProcessorProperties(
+				URI.create("http://localhost:8081"),
+				Duration.ofSeconds(1),
+				List.of(Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(20)),
+				Duration.ofSeconds(3),
+				Duration.ofSeconds(120),
+				Duration.ofMillis(1),
+				Duration.ofMillis(1),
+				new ProcessorProperties.Reconciliation(
+						Duration.ofSeconds(5), 20, Duration.ofSeconds(30), Duration.ofSeconds(5), Duration.ofSeconds(60)),
+				new ProcessorProperties.Workers(32, 8, 4, workerPoolSize),
+				new ProcessorProperties.Dispatcher(Duration.ofSeconds(2), 20, Duration.ofSeconds(60)));
+	}
+}
